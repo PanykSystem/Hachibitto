@@ -113,11 +113,10 @@ void vdp_9938_write_palette(u8 index, u8 color_grb)
     }
 }
 
-// When CPU writes to Port 0x9A
-// Note that in real hardware, Port 0x9A shares the
-// same 'first byte' register with ports 0x9A and 0x99
-// and so that is handled here by reuse of ALatch. They
-// do use separate flip-flops however.
+// -------------------------------------------------------------------------------------------------
+// Note that in real hardware, Port 0x9A shares the same 'first byte' register with ports 0x9A and
+// 0x99 and so that is handled here by reuse of ALatch. They do use separate flip-flops however.
+// -------------------------------------------------------------------------------------------------
 void write_port_palette(uint8_t data)
 {
     if (!palette_latch)
@@ -175,6 +174,11 @@ void BuildLutTablehh(void)
     }
 }
 
+// ----------------------------------------------------------------------
+// When an IRQ fires, we call this so we can manage the two independent
+// possible interrupt requests. One is for the VSync at the end of a 
+// frame and the other is the VDP Line Interrupt.
+// ----------------------------------------------------------------------
 void SetVDPIRQ(u8 bit, u8 set)
 {
     if (set) msx_irq_pending |= bit;
@@ -568,7 +572,7 @@ ITCM_CODE void ColorSprites(uint8_t Y, u8 *ZBuf)
 
   // Local copy is slightly faster than a global fetch...
   u8 CurrentEpoch = (++CurrentEpochSaved);
-  
+
   // Assume no sprites until proven otherwise
   Screen8LineHasSprites = 0;
 
@@ -622,7 +626,7 @@ ITCM_CODE void ColorSprites(uint8_t Y, u8 *ZBuf)
 
   /* Mark last checked sprite (9th in line, Y=216, or sprite #31) */
   VDPStatus[0]|=L<32? L:31;
-  
+
   // Mark if Screen has any sprites for Screen 8 fast processing
   Screen8LineHasSprites = (M != 0);
 
@@ -1325,7 +1329,7 @@ ITCM_CODE void RefreshLine4(uint8_t Y)
             // We mask with index color 16 which is as close as we can get to black in the fixed part of the palette.
             if (myConfig.maskBorders & 1)
             {
-                src32[0] = 0x10101010; 
+                src32[0] = 0x10101010;
                 src32[1] = 0x10101010;
             }
 
@@ -1454,13 +1458,13 @@ ITCM_CODE void RefreshLine6(u8 uY)
     else
     {
         uint8_t *P = RefreshBorder(uY);
-        
+
         u32 * restrict dst32 = (u32*)P;
         u32 addr = ((u32)((uY + VScroll) & 1023) << 7);
         const u8 * restrict src = &ChrTab[addr & 0x7FFF];
 
         // --------------------------------------------------------------------
-        // For Screen 6, we are only rendering the even (A) pixels. 
+        // For Screen 6, we are only rendering the even (A) pixels.
         // This decimation is okay as almost nothing uses Screen 6 except
         //the main MSX logo screen which looks fine drawing every other pixel.
         // We might alpha-blend someday... but that day is not today.
@@ -1596,7 +1600,7 @@ void ColorSprites_Zoomed(uint8_t Y, u8 *ZBuf)
              * early-clock bit together determine the sprite's screen X.
              * Convert that coordinate to the zoomed source coordinate.
              */
-            spriteX = ((int)AT[1] - ((C & 0x80) ? 32 : 0)) * 2 - (int)screenPanX + 32;                
+            spriteX = ((int)AT[1] - ((C & 0x80) ? 32 : 0)) * 2 - (int)screenPanX + 32;
 
             P = ZBuf;
             O = OccBuf;
@@ -1789,7 +1793,7 @@ void RefreshLine7_Zoomed(u8 uY)
 ITCM_CODE void RefreshLine7(u8 uY)
 {
     DEBUG_REFRESH(7);
-    
+
     if (zoom_screen == 2) return RefreshLine7_Zoomed(uY);
 
     if (!ScreenON)
@@ -1805,7 +1809,7 @@ ITCM_CODE void RefreshLine7(u8 uY)
         if (FlipEvenOdd && OddPage && VDP_Memory<=src-0x10000) src-=0x10000;
 
         const u32* restrict s32 = (const u32*)src;
-        
+
         for (int i = 0; i < 32; i++)
         {
             u32 chunk0 = *s32++;
@@ -1834,7 +1838,7 @@ ITCM_CODE void RefreshLine7(u8 uY)
 void RefreshLine8(u8 uY)
 {
     DEBUG_REFRESH(8);
-    
+
     if (!ScreenON)
     {
       memset(XBuf + (uY<<8), XPal[BGColor], 256);
@@ -1849,7 +1853,7 @@ void RefreshLine8(u8 uY)
         memcpy(P, S, 256); // Blast all 256-pixels across into our destination buffer
 
         ColorSprites(uY, P - 32);
-        
+
         if (Screen8LineHasSprites)
         {
             u8 epoch = CurrentEpochSaved;
@@ -1879,10 +1883,10 @@ void RefreshLine8(u8 uY)
                 out[x >> 2] = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
             }
         }
-        
+
         u32 * restrict dst = (u32 *)(XBuf + ((u16)uY << 8));
         const u8 * restrict src = (const u8 *)(LineScratch + LS_BASE);
-        memcpy(dst, src, 256);      
+        memcpy(dst, src, 256);
     }
 }
 
@@ -2251,9 +2255,9 @@ ITCM_CODE void Write9938(u8 iReg, u8 value)
             VDPStatus[1]&=0xFE;
             SetVDPIRQ(VDP_IRQ_LINE, 0);
         }
-        break;    
-    case 1: 
-        if(VDPStatus[0]&0x80) SetVDPIRQ(VDP_IRQ_VBLANK, value&0x20? 1:0); 
+        break;
+    case 1:
+        if(VDPStatus[0]&0x80) SetVDPIRQ(VDP_IRQ_VBLANK, value&0x20? 1:0);
         break;
     case  7:
       FGColor=value>>4;
@@ -2559,7 +2563,7 @@ ITCM_CODE void Loop9938(void)
       {
           if(CheckSprites()) VDPStatus[0] |= VDP9938_STAT_OVRLAP;
       }
-      
+
       // Get ready for the next frame... clear the sprite Occupancy buffer
       memset(OccBuf, 0, sizeof(OccBuf));
       CurrentEpochSaved = 0;  // Will be immediately incremented to 1 and so not match our cleared OccBuf[]
