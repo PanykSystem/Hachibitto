@@ -108,40 +108,23 @@ sccTestReg:
 sccPadding:
 	.space 3				;@ 0xB1-0xB3
 
-;@----------------------------------------------------------------------------
 ;@ Runtime mixer state
-;@----------------------------------------------------------------------------
-
-sccCh0Freq:
-	.short 0				;@ 0xB4
-sccCh0Addr:
-	.short 0				;@ 0xB6
-
-sccCh1Freq:
-	.short 0				;@ 0xB8
-sccCh1Addr:
-	.short 0				;@ 0xBA
-
-sccCh2Freq:
-	.short 0				;@ 0xBC
-sccCh2Addr:
-	.short 0				;@ 0xBE
-
-sccCh3Freq:
-	.short 0				;@ 0xC0
-sccCh3Addr:
-	.short 0				;@ 0xC2
-
-sccCh4Freq:
-	.short 0				;@ 0xC4
-sccCh4Addr:
-	.short 0				;@ 0xC6
-
-;@ End of C SCC structure.
-sccSize:
-
-;@ State begins at the actual C struct base.
+sccCh0Phase:	.long 0			;@ 0xB4  (same place the old accumulators were)
+sccCh1Phase:	.long 0			;@ 0xB8
+sccCh2Phase:	.long 0			;@ 0xBC
+sccCh3Phase:	.long 0			;@ 0xC0
+sccCh4Phase:	.long 0			;@ 0xC4
+sccCh0Inc:	.long 0			;@ 0xC8
+sccCh1Inc:	.long 0			;@ 0xCC
+sccCh2Inc:	.long 0			;@ 0xD0
+sccCh3Inc:	.long 0			;@ 0xD4
+sccCh4Inc:	.long 0			;@ 0xD8
+sccCh0Eff:	.byte 0			;@ 0xDC  effective volume (0 if disabled)
+sccCh1Eff:	.byte 0
+sccCh2Eff:	.byte 0
+sccCh3Eff:	.byte 0
+sccCh4Eff:	.byte 0
+	.space 3			;@ pad to word
+sccSize:				;@ 0xE4
 sccStateStart = sccCh0Wave
-
-;@ State ends immediately before runtime mixer state.
-sccStateEnd = sccCh0Freq
+sccStateEnd = sccCh0Phase

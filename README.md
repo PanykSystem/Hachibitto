@@ -16,7 +16,7 @@ Features :
 * Loads .ROM cartridge files up to 1MB (DS-Lite/Phat) or 4MB (DSi). 
 * Two cart slots supported (if a 2nd cart is utilized, it cuts the max .ROM filesizes above in half).
 * Loads .DSK disk files that are single side (360K) or double sided (720K) with in-game disk swap.
-* Emulated machine is 128K of User RAM and 128K of VRAM.
+* Emulated machine is 256K of User RAM and 128K of VRAM.
 * Fully configurable keys for the 12 NDS keys to any combination of joystick/keyboard.
 * Save and Restore states so you can pick up where you left off on a per-game basis.
 * Standard PSG, 2x PSG, SCC, SCC+ and FM-PAC (MSX-MUSIC + SRAM) available.
@@ -104,6 +104,19 @@ The Hachibitto HB-8 Fantasy Console :
 
 Version History :
 -----------------------
+Version 1.4 - 12-Oct-2026 by wavemotion-dave
+* New megarom mappers supported. Game Master 2 with SRAM now works. KOEI with 32K SRAM now works. Wizardry now works.
+* Quit Icon added to main menu screen.
+* Disk Handling improved - should hopefully fix the rare disk write corruption.
+* New Audio handler for DSi - improves sample rate and now in-game voices (Aleste 2, Madou Monogatari, etc) are heard!
+* MSX-MUSIC updates to improve accuracy across the board.
+* Updates to SCC driver to fix stray tones/noise in various SCC games. 
+* SCC Mixer rewritten for speed and for high notes: the old counter only advance one wave step per sample, which broke any note above roughly SCC clock / (32 * SCCMULT) once SCCMULT was raised to 128. The new design has no such limit.
+* SCC Frequency period is now F+1 ticks, as on the real chip.
+* Manbow 2 now supported. Only hacked versions without Flash Chip (search for the 60Hz Patched version).
+* MSX2 machine is now 256K of RAM
+* Improved 2x PSG icon
+
 Version 1.3 - 08-Oct-2026 by wavemotion-dave
 * Revamped UI with an icon-driven approach.
 * Fix for MSX1 sprite rendering - no more black shadow / glitches.

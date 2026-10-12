@@ -107,6 +107,7 @@ extern u32 ChrTabM;
 extern u32 ColTabM;
 extern u32 ChrGenM;
 extern u32 SprTabM;
+extern u8 Screen8_rendered;
 
 /** WrData9938() *********************************************/
 /** Write a value V to the VDP Data Port.                   **/

@@ -19,7 +19,7 @@ typedef struct {
 	s8 ch1Wave[32];
 	s8 ch2Wave[32];
 	s8 ch3Wave[32];
-    s8 ch4Wave[32];
+	s8 ch4Wave[32];
 	u16 ch0Frq;
 	u16 ch1Frq;
 	u16 ch2Frq;
@@ -34,17 +34,24 @@ typedef struct {
 	u8 testReg;
 	u8 padding[3];
 
-	u16 ch0Freq;
-	u16 ch0Addr;
-	u16 ch1Freq;
-	u16 ch1Addr;
-	u16 ch2Freq;
-	u16 ch2Addr;
-	u16 ch3Freq;
-	u16 ch3Addr;
-	u16 ch4Freq;
-	u16 ch4Addr;
-} SCC;
+	// Runtime mixer state (not saved)
+	u32 ch0Phase;		// 0xB4
+	u32 ch1Phase;
+	u32 ch2Phase;
+	u32 ch3Phase;
+	u32 ch4Phase;		// 0xC4
+	u32 ch0Inc;		// 0xC8
+	u32 ch1Inc;
+	u32 ch2Inc;
+	u32 ch3Inc;
+	u32 ch4Inc;		// 0xD8
+	u8 ch0Eff;		// 0xDC
+	u8 ch1Eff;
+	u8 ch2Eff;
+	u8 ch3Eff;
+	u8 ch4Eff;
+	u8 effPadding[3];	// pad to 0xE4
+} SCC;			// sizeof == 0xE4
 
 /**
  * Reset/initialize SCC chip.

@@ -1055,7 +1055,7 @@ ITCM_CODE void cpu_writeport_msx(register u8 Port,register unsigned char Value)
         if (myConfig.machineType != MACHINE_MSX1)
         {
             u8 page = Port-0xFC;
-            u8 bank = Value & 0x7; // 128K is 16K in 8 banks
+            u8 bank = Value & 0xF; // 256K is 16K in 16 banks
             
             mirror_ram_bank[page] = bank; // For read-back
 
@@ -1558,6 +1558,17 @@ void MSX_CartSetup(u8 media_id)
             MSXCartPtr[media_id][5] = (u8*)CART_Memory+0x0000;        // Segment 0 default
             MSXCartPtr[media_id][6] = (u8*)CART_Memory+0x0000;        // Segment 0 default
             MSXCartPtr[media_id][7] = (u8*)CART_Memory+0x0000;        // Segment 0 default
+        }
+        else if (MyMedia[media_id].mapperType == MANBOW2)
+        {
+            MSXCartPtr[media_id][0] = (u8*)Unmapped_Memory;           // Segment Unmapped
+            MSXCartPtr[media_id][1] = (u8*)Unmapped_Memory;           // Segment Unmapped
+            MSXCartPtr[media_id][2] = (u8*)CART_Memory+0x0000;        // Segment 0 default
+            MSXCartPtr[media_id][3] = (u8*)CART_Memory+0x2000;        // Segment 1 default
+            MSXCartPtr[media_id][4] = (u8*)CART_Memory+0x4000;        // Segment 2 default
+            MSXCartPtr[media_id][5] = (u8*)CART_Memory+0x6000;        // Segment 3 default
+            MSXCartPtr[media_id][6] = (u8*)Unmapped_Memory;           // Segment Unmapped
+            MSXCartPtr[media_id][7] = (u8*)Unmapped_Memory;           // Segment Unmapped
         }
 
         // ---------------------------------------------------------------------

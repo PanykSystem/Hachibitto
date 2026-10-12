@@ -33,7 +33,7 @@ CFLAGS	:= -Wall -Wno-strict-aliasing -Wno-array-bounds -O2 -march=armv5te -mtune
 CFLAGS	+=	$(INCLUDE) -DARM9
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
-ASFLAGS	:=	$(ARCH) -march=armv5te -mtune=arm946e-s -DSCCMULT=64 -DAY_UPSHIFT=2 -DNDS
+ASFLAGS	:=	$(ARCH) -march=armv5te -mtune=arm946e-s -DSCCMULT=128 -DAY_UPSHIFT=3 -DNDS
 
 LDFLAGS	=	-specs=ds_arm9.specs $(ARCH) -Wl,-Map,$(notdir $*.map)
 

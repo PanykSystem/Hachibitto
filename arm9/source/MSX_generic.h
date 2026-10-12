@@ -165,6 +165,7 @@ extern u8 mirror_ram_bank[4];
 #define NAMCO           71  // Not one of the general mappers a user can pick
 #define WIZARDRY        72  // Not one of the general mappers a user can pick
 #define KOEISRAM32      73  // Not one of the general mappers a user can pick
+#define MANBOW2         74  // Not one of the general mappers a user can pick
 
 #define FMPAC_SRAM      87  // For our special FM-PAC Cart
 #define SCCPLUS_RAM     88  // For our special SCC+ "Cart"
@@ -176,10 +177,10 @@ extern u32 MAX_CART_SIZE_KB;        // This one is variable in size
 
 extern u8 *ROM_Memory;
 extern u8 *DISK_Memory;
-extern u8 RAM_Memory[0x20000];
+extern u8 RAM_Memory[0x40000];
 extern u8 BIOS_Memory[0x8000];
 extern u8 SRAM_Memory[0x8000];
-extern u8 SCC_Memory[0x10000];
+extern u8 *SCC_Memory;
 
 extern const unsigned char MSXBios_DISK[0x4000];
 extern const unsigned char MSXBios_MSX2[0x8000];

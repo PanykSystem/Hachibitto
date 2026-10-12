@@ -28,7 +28,7 @@
 //@----------------------------------------------------------------------------
 //@ Tunables.
 //@----------------------------------------------------------------------------
-#define YM_SAMPLE_RATE             27965     // confirmed value, matches the AY driver's rate
+#define YM_SAMPLE_RATE             31000     // confirmed value, matches the AY driver's rate
 #define YM_MASTER_CLOCK            3579545   // MSX standard clock, same as SCC's
 #define YM_SIN_SHIFT               24        // phase>>24 -> 8-bit (256 entry) table index
 #define YM_GAIN_RAMP_STEP          16        // Legacy fast-mixer/rhythm gain ramp toward full
@@ -107,22 +107,6 @@ static   u8 YM_MulTableX2[16] __attribute__((section(".dtcm"))) =
     1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20, 24, 24, 30, 30
 };
 
-// Exact 3-step advance of the YM noise LFSR.
-// Indexed by the original low 3 bits.
-// Must be in DTCM/fast RAM if possible.
-static   u32 YM_NoiseAdvance3[8] __attribute__((section(".dtcm")))
-=
-{
-    0x000000,
-    0x200080,
-    0x400100,
-    0x600180,
-    0x800200,
-    0xA00280,
-    0xC00300,
-    0xE00380
-};
-
 //@----------------------------------------------------------------------------
 //@ 16-entry instrument table containing Yamaha ROM preset data. The normal
 //@ FM path uses MUL, TL, FB and the operator envelope rates/levels; other
@@ -194,8 +178,9 @@ static u32 YM_ComputePhaseIncrement(u16 fNumber, u8 block, u8 mulNibble)
     unsigned long long num = (unsigned long long)fNumber * (unsigned long long)YM_MulTableX2[mulNibble & 0x0F];
     num <<= block;
     num *= (unsigned long long)YM_MASTER_CLOCK << 12;
-    u32 inc = num / ((unsigned long long)72 * (unsigned long long)YM_SAMPLE_RATE);
-    //if (inc > 0xFFFFFFFFULL) inc = 0xFFFFFFFFULL;
+    
+    unsigned long long inc = num / (72ULL * YM_SAMPLE_RATE);
+    if (inc >= 0x40000000ULL) return 0;   // would alias: freeze the operator
     return (u32)inc;
 }
 
@@ -268,17 +253,6 @@ static inline void YM_UpdateGain2(YM_Oscillator *osc, u8 keyOn, u32 releaseStep)
         }
     }
 }
-
-//@----------------------------------------------------------------------------
-//@ Legacy single-oscillator renderer for the DS-Lite fast mixer. It uses a
-//@ gain ramp rather than the normal mixer's two-operator FM envelopes. The
-//@ rhythm voices use the related gain helper above.
-//@----------------------------------------------------------------------------
-/* Legacy fast-mixer release table. The mapping is an approximation rather
-   than a hardware-rate table; larger RR values produce faster release here. */
-
-static   u16 YM_RRReleaseStepTest[16] __attribute__((section(".dtcm"))) =
-    {900,1000,1100,1200,1350,1500,1700,1900,2150,2400,2700,3000,3300,3550,3780,3984};
 
 //@----------------------------------------------------------------------------
 //@ Public interface
@@ -370,6 +344,13 @@ void YMWrite(u8 value, u8 address, YM *chip)
         {
             if (!(old & YM_RHYTHM_ENABLE_BIT))
             {
+                /* Entering rhythm mode: channels 6-8 stop being melodic voices. */
+                for (int c6 = YM_CHANNEL_BD; c6 <= YM_CHANNEL_TOMTCY; c6++)
+                {
+                    chip->channels[c6].keyOn = 0;
+                    chip->channels[c6].osc.gain = 0;   // drop any leftover melodic gain
+                }
+                
                 /* Entering rhythm mode: any selected percussion voice is a new hit. */
                 if (value & YM_RHYTHM_BD_BIT)
                     YM_RhythmRetrigger(&chip->channels[YM_CHANNEL_BD].osc, 1);
@@ -406,9 +387,6 @@ void YMWrite(u8 value, u8 address, YM *chip)
             chip->rhythmSD.gain = 0;
             chip->rhythmTCY.gain = 0;
         }
-
-        /* The melodic key-on field is not used for rhythm voices. */
-        chip->channels[YM_CHANNEL_BD].keyOn = 0;
     }
     else if (address == 0x0F)
     {
@@ -430,7 +408,15 @@ void YMWrite(u8 value, u8 address, YM *chip)
         YM_UpdateChannelFreq(chip, ch);
 
         if (!(chip->rhythmReg & YM_RHYTHM_ENABLE_BIT) || ch < YM_CHANNEL_BD)
-            c->keyOn = (value & YM_REG_KEY_BIT) ? 1 : 0;
+        {
+            u8 newKey = (value & YM_REG_KEY_BIT) ? 1 : 0;
+            if (newKey && !c->keyOn)
+            {
+                c->osc.previousKeyOn = 0;   /* make the mixer see a fresh key-on edge */
+                c->osc.gain = 0;            /* fast mixer: restart its gain ramp      */
+            }
+            c->keyOn = newKey;
+        }
     }
     else if (address >= 0x30 && address <= 0x38)
     {
@@ -467,13 +453,13 @@ enum
     YM_FM_ENV_RELEASE
 };
 
-static   u8 YM_FM_SustainAtten[16] =
+static   u8 YM_FM_SustainAtten[16] __attribute__((section(".dtcm"))) =
 {
       0,  8, 16, 24, 32, 40, 48, 56,
      64, 72, 80, 88, 96,104,112,127
 };
 
-static   u8 YM_FM_FBDepth[8] =
+static   u8 YM_FM_FBDepth[8] __attribute__((section(".dtcm"))) =
 {
     0, 2, 4, 8, 16, 32, 64, 96
 };
@@ -517,7 +503,7 @@ static inline void YM_PrecomputeFMRates(YM *chip, int ch)
     p->fbDepth = YM_FM_FBDepth[inst->fb & 7];
     p->slMod = YM_FM_SustainAtten[inst->slMod & 0x0F];
     p->slCar = YM_FM_SustainAtten[inst->slCar & 0x0F];
-    p->volume = (u8)(15 - (chip->channels[ch].volume & 0x0F));
+    p->volume = YM_SustainGain[chip->channels[ch].volume & 0x0F];   /* 3 dB/step like the OPLL */
 }
 
 ITCM_CODE static inline void YM_FMEnvelopeStep(
@@ -671,9 +657,8 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
        asserted.  It is deliberately not used for amplitude here. */
     osc->gain = 255;
 
-    // Two samples are synthesized at once, matching the existing normal mixer.
-    osc->modPhase += osc->modPhaseIncrement << 1;
-    osc->phase += osc->phaseIncrement << 1;
+    osc->modPhase += osc->modPhaseIncrement;
+    osc->phase += osc->phaseIncrement;
 
     s32 mod = YM_CarrierSineTable[(osc->modPhase >> YM_SIN_SHIFT) & 0xFF];
     s32 modGain = 255 - osc->modEnv;
@@ -699,17 +684,20 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
 
     // Carrier envelope followed by channel volume attenuation.
     carrier = (carrier * (255 - osc->carEnv)) >> 7;
-    carrier = (carrier * p->volume) >> 3;
+    carrier = (carrier * p->volume) >> 7;
 
     // Match the baseline YMMixer amplitude.  The carrier is already scaled
-    // by (15-volume) above; *16 here is equivalent to the old >>8 path
-    // and restores the roughly 2x level lost in the previous FM renderer.
-    return carrier * 6;
+    // by (15-volume) above; Play with this multiplier to adjust overall volume.
+    return carrier * 12;
 }
 
 // -------------------------------------------------------------------------
 // And finally the mixer - this is a real hot-spot of emulation given the
 // number of music channels that need to be handled. In ITCM to help speed.
+// -------------------------------------------------------------------------
+// -------------------------------------------------------------------------
+// Mixer: render every output sample independently.
+// No duplicated samples or averaging.
 // -------------------------------------------------------------------------
 ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
 {
@@ -717,11 +705,11 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
     int rhythmOn = chip->rhythmReg & YM_RHYTHM_ENABLE_BIT;
     int lastMelodic = rhythmOn ? YM_CHANNEL_BD : YM_NUM_CHANNELS;
 
-    for (i = 0; i < len; i += 2)
+    for (i = 0; i < len; i++)
     {
         s32 sample = 0;
 
-        /* Melodic 2-op FM - run through all possible channels */
+        /* Melodic 2-op FM */
         for (int ch = 0; ch < lastMelodic; ch++)
         {
             YM_Channel *cc = &chip->channels[ch];
@@ -729,13 +717,15 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
             if (!cc->keyOn && cc->osc.gain == 0)
                 continue;
 
-            sample += YM_RenderChannel2FM(&cc->osc, cc->keyOn, ch);
+            sample += YM_RenderChannel2FM(
+                &cc->osc,
+                cc->keyOn,
+                ch
+            );
         }
 
         /*
-         * -----------------------------------------------------------------
          * Rhythm
-         * -----------------------------------------------------------------
          */
         if (rhythmOn)
         {
@@ -743,9 +733,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
             YM_Channel *hs = &chip->channels[YM_CHANNEL_HHSD];
             YM_Channel *tt = &chip->channels[YM_CHANNEL_TOMTCY];
 
-            /*
-             * Bass Drum
-             */
+            /* Bass Drum */
             if (bd->osc.gain != 0)
             {
                 YM_UpdateGain2(
@@ -756,9 +744,11 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
 
                 if (bd->osc.gain != 0)
                 {
-                    bd->osc.phase += bd->osc.phaseIncrement << 1;
+                    bd->osc.phase += bd->osc.phaseIncrement;
 
-                    s32 s = YM_CarrierSineTable[(bd->osc.phase >> YM_SIN_SHIFT) & 0xFF];
+                    s32 s = YM_CarrierSineTable[
+                        (bd->osc.phase >> YM_SIN_SHIFT) & 0xFF
+                    ];
 
                     sample +=
                         (s *
@@ -768,9 +758,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 }
             }
 
-            /*
-             * Tom-Tom
-             */
+            /* Tom-Tom */
             if (tt->osc.gain != 0)
             {
                 YM_UpdateGain2(
@@ -781,9 +769,11 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
 
                 if (tt->osc.gain != 0)
                 {
-                    tt->osc.phase += tt->osc.phaseIncrement << 1;
+                    tt->osc.phase += tt->osc.phaseIncrement;
 
-                    s32 s = YM_CarrierSineTable[(tt->osc.phase >> YM_SIN_SHIFT) & 0xFF];
+                    s32 s = YM_CarrierSineTable[
+                        (tt->osc.phase >> YM_SIN_SHIFT) & 0xFF
+                    ];
 
                     sample +=
                         (s *
@@ -794,29 +784,12 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
             }
 
             /*
-             * -----------------------------------------------------------------
-             * Noise percussion
-             *
-             * Advance the YM2413 LFSR TWO steps, since this synthesis sample
-             * represents two output samples.
-             * -----------------------------------------------------------------
+             * Noise percussion: one LFSR step per output sample.
              */
             if (hs->osc.gain != 0 ||
                 chip->rhythmSD.gain != 0 ||
                 chip->rhythmTCY.gain != 0)
             {
-                /*
-                 * LFSR step #1
-                 */
-                if (chip->noiseLFSR & 1)
-                    chip->noiseLFSR ^= 0x800200;
-
-                chip->noiseLFSR >>= 1;
-                chip->noiseLFSR &= 0x7FFFFF;
-
-                /*
-                 * LFSR step #2
-                 */
                 if (chip->noiseLFSR & 1)
                     chip->noiseLFSR ^= 0x800200;
 
@@ -838,12 +811,10 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                     (((hhPhase >> 3) & 1) ^ ((cymPhase >> 5) & 1)) |
                     (((cymPhase >> 3) & 1) ^ ((cymPhase >> 5) & 1));
 
-#define YM_RHYTHM_WAVE_2(p) \
-                    YM_SinTable[((p) >> 2) & 0xFF]
+#define YM_RHYTHM_WAVE(p) \
+    YM_SinTable[((p) >> 2) & 0xFF]
 
-                /*
-                 * Hi-Hat
-                 */
+                /* Hi-Hat */
                 if (hs->osc.gain != 0)
                 {
                     YM_UpdateGain2(
@@ -861,7 +832,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                         else
                             phase = noiseBit ? 0x034 : 0x0D0;
 
-                        s32 s = YM_RHYTHM_WAVE_2(phase);
+                        s32 s = YM_RHYTHM_WAVE(phase);
 
                         sample +=
                             (s *
@@ -871,12 +842,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                     }
                 }
 
-                /*
-                 * Snare Drum
-                 *
-                 * Keep the tuned DSi version exactly as-is:
-                 * 2000 release and 19/16 gain.
-                 */
+                /* Snare Drum: preserve existing tuning */
                 if (chip->rhythmSD.gain != 0)
                 {
                     YM_UpdateGain2(
@@ -894,7 +860,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                         else
                             phase = noiseBit ? 0x000 : 0x100;
 
-                        s32 s = YM_RHYTHM_WAVE_2(phase);
+                        s32 s = YM_RHYTHM_WAVE(phase);
 
                         sample +=
                             (s *
@@ -904,9 +870,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                     }
                 }
 
-                /*
-                 * Top Cymbal
-                 */
+                /* Top Cymbal */
                 if (chip->rhythmTCY.gain != 0)
                 {
                     YM_UpdateGain2(
@@ -917,10 +881,8 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
 
                     if (chip->rhythmTCY.gain != 0)
                     {
-                        u32 phase =
-                            shortNoise ? 0x300 : 0x100;
-
-                        s32 s = YM_RHYTHM_WAVE_2(phase);
+                        u32 phase = shortNoise ? 0x300 : 0x100;
+                        s32 s = YM_RHYTHM_WAVE(phase);
 
                         sample +=
                             (s *
@@ -930,378 +892,24 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                     }
                 }
 
-#undef YM_RHYTHM_WAVE_2
+#undef YM_RHYTHM_WAVE
             }
         }
 
         /*
-         * Output filter.
-         *
-         * One low-pass smoothing update per synthesized sample, consistent
-         * with the reduced-rate synthesis.
+         * Output filter: one update per output sample. Experimentally this sounds best at >> 5.
          */
-        sample += (chip->outputFilterState - sample) >> 4;
-
+        sample += (chip->outputFilterState - sample) >> 5;
         chip->outputFilterState = sample;
 
-        /*
-         * Output sample 0 and repeat for sample 1
-         */
-        s32 mixed = ((s32)dest[i] + 32767) + sample;
-        if ((u32)(mixed + 32768) > 65535) mixed = (mixed < 0) ? -32768 : 32767;
-        dest[i] = (s16)mixed;
-
-        mixed = ((s32)dest[i + 1] + 32767) + sample;
-        if ((u32)(mixed + 32768) > 65535) mixed = (mixed < 0) ? -32768 : 32767;
-        dest[i + 1] = (s16)mixed;
-    }
-}
-
-// =====================================================================================
-// DS-Lite fast mixer
-//
-// Generates one FM sample for every two output samples.
-//
-// IMPORTANT:
-//   State advances at 2x the normal per-output-sample increment, so pitch and
-//   envelope timing remain approximately correct.
-//
-// This deliberately trades audio fidelity for CPU speed by using a single
-// oscillator per melodic channel and holding each synthesized sample across
-// multiple output samples. DSi/XL/LL should use the normal YMMixer().
-// =====================================================================================
-
-static inline s32 YM_RenderChannel2(YM_Oscillator *osc, u8 keyOn, u8 volume, u32 releaseStep)
-{
-    if (!(keyOn && osc->gain == osc->sustainGain))
-        YM_UpdateGain2(osc, keyOn, releaseStep);
-
-    if (osc->gain == 0)
-        return 0;
-
-    // Advance TWO audio samples at once.
-    osc->phase += osc->phaseIncrement << 1;
-
-    // Only ONE waveform lookup/multiply for the two output samples.
-    s32 s = YM_SinTable[(osc->phase >> YM_SIN_SHIFT) & 0xFF];
-
-    return (s * (15 - volume) * osc->gain) >> YM_OUT_SHIFT;
-}
-
-
-// =====================================================================================
-// DS-Lite ultra-fast mixer helpers
-//
-// One synthesis sample is generated for every THREE output samples.
-//
-// State advances by three samples at a time, but only one waveform lookup/multiply
-// is performed.
-//
-// This is intentionally aggressive.  The resulting audio has a ~9.3 kHz effective
-// sample-and-hold rate, but FM-PAC music should remain recognizable and pitched
-// correctly.
-// =====================================================================================
-
-static inline void YM_UpdateGain3(YM_Oscillator *osc, u8 keyOn, u32 releaseStep)
-{
-    if (keyOn)
-    {
-        osc->releaseAccum = 0;
-
-        if (osc->gain < 255)
-        {
-            u16 g = osc->gain + (YM_GAIN_RAMP_STEP * 3);
-            osc->gain = (g >= 255) ? 255 : (u8)g;
-            osc->sustainCounter = 0;
-        }
-        else if (osc->gain > osc->sustainGain)
-        {
-            osc->sustainCounter += 3;
-
-            if (osc->sustainCounter >= YM_SUSTAIN_TICK_SAMPLES)
-            {
-                osc->sustainCounter = 0;
-                osc->gain--;
-            }
-        }
-        else
-        {
-            osc->sustainCounter = 0;
-        }
-    }
-    else if (osc->gain > 0)
-    {
-        osc->sustainCounter = 0;
-
-        osc->releaseAccum += releaseStep * 3;
-
-        if (osc->releaseAccum >= 0x10000)
-        {
-            osc->releaseAccum -= 0x10000;
-            osc->gain--;
-        }
-    }
-}
-
-
-static inline s32 YM_RenderChannel3(YM_Oscillator *osc, u8 keyOn, u8 attenuation, u32 releaseStep)
-{
-    if (!(keyOn && osc->gain == osc->sustainGain))
-        YM_UpdateGain3(osc, keyOn, releaseStep);
-
-    if (osc->gain == 0)
-        return 0;
-
-    // Advance THREE audio samples at once.
-    osc->phase += osc->phaseIncrement * 3;
-
-    // Only ONE waveform lookup/multiply for all three output samples.
-    s32 s = YM_SinTable[(osc->phase >> YM_SIN_SHIFT) & 0xFF];
-
-    return (s * attenuation * osc->gain) >> YM_OUT_SHIFT;
-}
-
-
-// -----------------------------------------------------------------------
-// Call this one from DS-Lite/Phat only... it's deliberately simplified.
-// -----------------------------------------------------------------------
-void YMMixerFast(int len, s16 *dest, YM *chip)
-{
-    int i;
-    int rhythmOn = chip->rhythmReg & YM_RHYTHM_ENABLE_BIT;
-    int lastMelodic = rhythmOn ? YM_CHANNEL_BD : YM_NUM_CHANNELS;
-
-      int volBD  = 15 - chip->rhythmVolBD;
-      int volHH  = 15 - chip->rhythmVolHH;
-      int volTOM = 15 - chip->rhythmVolTOM;
-      int volTCY = 15 - chip->rhythmVolTCY;
-
-    for (i = 0; i < len; i += 3)
-    {
-        s32 sample = 0;
-        int ch;
-
-        for (ch = 0; ch < lastMelodic; ch++)
-        {
-            YM_Channel *cc = &chip->channels[ch];
-
-            if (!cc->keyOn && cc->osc.gain == 0)
-                continue;
-
-            int attenuation = 15 - cc->volume;
-
-            sample += YM_RenderChannel3(
-                &cc->osc,
-                cc->keyOn,
-                attenuation,
-                (u32)YM_RRReleaseStepTest[cc->instPtr->rrCar & 0x0F] << 2);
-
-            // Acoustic Bass fundamental.
-            if (ch == 3 &&
-                cc->instrument == 14 &&
-                cc->osc.gain != 0)
-            {
-                s32 fundamental =
-                    YM_SinTable[(cc->osc.phase >> YM_SIN_SHIFT) & 0xFF];
-
-                sample +=
-                    (fundamental * attenuation * cc->osc.gain) >>
-                    (YM_OUT_SHIFT + 1);
-            }
-        }
-
-        if (rhythmOn)
-        {
-            YM_Channel *bd = &chip->channels[YM_CHANNEL_BD];
-            YM_Channel *hs = &chip->channels[YM_CHANNEL_HHSD];
-            YM_Channel *tt = &chip->channels[YM_CHANNEL_TOMTCY];
-
-            // Bass Drum
-            if (bd->osc.gain != 0)
-            {
-                YM_UpdateGain3(&bd->osc, 0, YM_PERCUSSION_RELEASE_STEP);
-
-                if (bd->osc.gain != 0)
-                {
-                    bd->osc.phase += bd->osc.phaseIncrement * 3;
-
-                    s32 s =
-                        YM_SinTable[
-                            (bd->osc.phase >> YM_SIN_SHIFT) & 0xFF];
-
-                    sample +=
-                        (s * volBD * bd->osc.gain) >>
-                        YM_OUT_SHIFT;
-                }
-            }
-
-            // Tom-Tom
-            if (tt->osc.gain != 0)
-            {
-                YM_UpdateGain3(&tt->osc, 0, YM_PERCUSSION_RELEASE_STEP);
-
-                if (tt->osc.gain != 0)
-                {
-                    tt->osc.phase += tt->osc.phaseIncrement * 3;
-
-                    s32 s =
-                        YM_SinTable[
-                            (tt->osc.phase >> YM_SIN_SHIFT) & 0xFF];
-
-                    sample +=
-                        (s * volTOM * tt->osc.gain) >>
-                        YM_OUT_SHIFT;
-                }
-            }
-
-            // Noise percussion
-            if (hs->osc.gain != 0 ||
-                chip->rhythmSD.gain != 0 ||
-                chip->rhythmTCY.gain != 0)
-            {
-                /*
-                 * Advance the LFSR THREE steps at once.
-                 *
-                 * This is mathematically identical to:
-                 *
-                 *   step
-                 *   step
-                 *   step
-                 *
-                 * in the old code.
-                 */
-                u32 noise = chip->noiseLFSR;
-
-                chip->noiseLFSR =
-                    (noise >> 3) ^ YM_NoiseAdvance3[noise & 7];
-
-                u32 noiseBit = chip->noiseLFSR & 1;
-
-                u32 hhPhase =
-                    (chip->channels[YM_CHANNEL_HHSD].osc.phase >> 22) &
-                    0x3FF;
-
-                u32 cymPhase =
-                    (chip->channels[YM_CHANNEL_TOMTCY].osc.phase >> 22) &
-                    0x3FF;
-
-                u32 shortNoise =
-                    (((hhPhase >> 2) & 1) ^ ((hhPhase >> 7) & 1)) |
-                    (((hhPhase >> 3) & 1) ^ ((cymPhase >> 5) & 1)) |
-                    (((cymPhase >> 3) & 1) ^ ((cymPhase >> 5) & 1));
-
-                #define YM_RHYTHM_WAVE_FAST(p) \
-                    YM_SinTable[((p) >> 2) & 0xFF]
-
-                // Hi-Hat
-                if (hs->osc.gain != 0)
-                {
-                    YM_UpdateGain3(
-                        &hs->osc,
-                        0,
-                        YM_PERCUSSION_RELEASE_STEP);
-
-                    if (hs->osc.gain != 0)
-                    {
-                        u32 phase;
-
-                        if (shortNoise)
-                            phase = noiseBit ? 0x2D0 : 0x234;
-                        else
-                            phase = noiseBit ? 0x034 : 0x0D0;
-
-                        s32 s = YM_RHYTHM_WAVE_FAST(phase);
-
-                        sample +=
-                            (s * volHH * hs->osc.gain) >>
-                            YM_OUT_SHIFT;
-                    }
-                }
-
-                // Snare Drum
-                if (chip->rhythmSD.gain != 0)
-                {
-                    YM_UpdateGain3(&chip->rhythmSD,0,2000);
-
-                    if (chip->rhythmSD.gain != 0)
-                    {
-                        u32 phase;
-
-                        if (hhPhase & 0x100)
-                            phase = noiseBit ? 0x300 : 0x200;
-                        else
-                            phase = noiseBit ? 0x000 : 0x100;
-
-                        s32 s = YM_RHYTHM_WAVE_FAST(phase);
-
-                        sample +=
-                            (s * (15 - chip->rhythmVolSD) * chip->rhythmSD.gain * 19) >>
-                            (YM_OUT_SHIFT + 4);
-                    }
-                }
-
-                // Top Cymbal
-                if (chip->rhythmTCY.gain != 0)
-                {
-                    YM_UpdateGain3(
-                        &chip->rhythmTCY,
-                        0,
-                        YM_PERCUSSION_RELEASE_STEP);
-
-                    if (chip->rhythmTCY.gain != 0)
-                    {
-                        u32 phase =
-                            shortNoise ? 0x300 : 0x100;
-
-                        s32 s = YM_RHYTHM_WAVE_FAST(phase);
-
-                        sample +=
-                            (s * volTCY * chip->rhythmTCY.gain) >>
-                            YM_OUT_SHIFT;
-                    }
-                }
-
-                #undef YM_RHYTHM_WAVE_FAST
-            }
-        }
-
-        sample += (chip->outputFilterState - sample) >> 4;
-        chip->outputFilterState = sample;
-
-        // Output sample 0
+        /* Mix one synthesized sample into the existing output buffer. */
         s32 mixed = ((s32)dest[i] + 32767) + sample;
 
-        if (mixed > 32767)
-            mixed = 32767;
+        // Clamp final mixed result...
+        if (mixed > 32767) mixed = 32767;
+        else if (mixed < -32768) mixed = -32768;
 
         dest[i] = (s16)mixed;
-
-        // Last partial block / samples 1 and 2
-        if (i + 2 < len)
-        {
-            mixed = ((s32)dest[i + 1] + 32767) + sample;
-
-            if (mixed > 32767)
-                mixed = 32767;
-
-            dest[i + 1] = (s16)mixed;
-
-            mixed = ((s32)dest[i + 2] + 32767) + sample;
-
-            if (mixed > 32767)
-                mixed = 32767;
-
-            dest[i + 2] = (s16)mixed;
-        }
-        else if (i + 1 < len)
-        {
-            mixed = ((s32)dest[i + 1] + 32767) + sample;
-
-            if (mixed > 32767)
-                mixed = 32767;
-
-            dest[i + 1] = (s16)mixed;
-        }
     }
 }
 

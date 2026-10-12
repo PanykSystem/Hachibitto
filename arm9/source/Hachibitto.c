@@ -64,7 +64,8 @@ s8  temp_offset         __attribute__((section(".dtcm"))) = 0;
 u8  slide_dampen        __attribute__((section(".dtcm"))) = 0;
 u8  bFirstSoundOutput   __attribute__((section(".dtcm"))) = 1;
 u8  skip_render         __attribute__((section(".dtcm"))) = 0;
-u8  zoom_screen        __attribute__((section(".dtcm"))) = 0;
+u8  zoom_screen         __attribute__((section(".dtcm"))) = 0;
+u8  bClickRemoveNeeded  __attribute__((section(".dtcm"))) = 0;
 
 // -------------------------------------------------------------------------------------------
 // The MSX systems have ROM, RAM, BIOS, Music Carts or SRAM. So we create generic buffers
@@ -79,10 +80,10 @@ u32 MAX_CART_SIZE_KB = 1024;                            // 1MB of ROM Cart... fo
 
 u8 *ROM_Memory;                                         // ROM Carts up to 1MB/4MB (that's pretty huge in the Z80 world!)
 u8 *DISK_Memory;                                        // Disk Memory will be 720K to support DSDD disks
-u8 RAM_Memory[0x20000]          ALIGN(32) = {0};        // RAM is 128K for the MSX2 (this is fairly standard for MSX2 machines)
+u8 RAM_Memory[0x40000]          ALIGN(32) = {0};        // RAM is 256K for the MSX2 (this should run most game/utility software)
 u8 BIOS_Memory[0x8000]          ALIGN(32) = {0};        // To hold our MSX BIOS - always in the lower 32K memory region of slot 0
 u8 SRAM_Memory[0x8000]          ALIGN(32) = {0};        // To hold up to 32K of SRAM (FM-PAC, Game Master 2, or special SRAM capable carts)
-u8 SCC_Memory[0x10000]          ALIGN(32) = {0};        // To hold the 64K of SCC-backed RAM
+u8 *SCC_Memory = RAM_Memory+0x30000;                    // To hold the 64K of SCC-backed RAM we simply use the last 64K of RAM (anything using SCC+ cart won't need that)
 
 u8 io_show_status = 0;      // Used to indicate a disk activity icons
 u8 sram_show_status = 0;    // Used to show SRAM icon for SRAM-based carts
@@ -243,17 +244,11 @@ void SoundUnPause(void)
 // We were using the normal ARM7 sound core but it sounded "scratchy" and so with the help
 // of FluBBa, we've swiched over to the maxmod sound core which performs much better.
 // --------------------------------------------------------------------------------------------
-#define sample_rate         (27965)    // To match the AY driver - this is good enough quality for the DS
+#define sample_rate         (31050)    // To match the sound driver - this is good enough quality for the DS
 #define buffer_size         (512+16)   // Enough buffer that we don't have to fill it too often. Must be multiple of 16.
 
 mm_ds_system sys   __attribute__((section(".dtcm")));
 mm_stream myStream __attribute__((section(".dtcm")));
-
-s16 mixbuf1[buffer_size+4] __attribute__((section(".dtcm")));      // When we have AY sound and SCC/YM possible... so we need to
-s16 mixbuf2[buffer_size+4] __attribute__((section(".dtcm")));      // mix into a single output so we render to mix buffers first.
-
-static s32 ay_smoothed __attribute__((section(".dtcm"))) = 0;
-const s32 MAX_STEP = 1600;   // tune by ear - start here, adjust to taste. This cuts out sharp pops/clicks in the output.
 
 // -------------------------------------------------------------------------------------------
 // maxmod will call this routine when the buffer is half-empty and requests that
@@ -261,6 +256,14 @@ const s32 MAX_STEP = 1600;   // tune by ear - start here, adjust to taste. This 
 // we will fill exactly that many. If the sound is paused, we fill with 'mute' samples.
 // -------------------------------------------------------------------------------------------
 s16 last_sample __attribute__((section(".dtcm"))) = 0;
+
+#define WAVE_DIRECT_BUF_SIZE        2047
+u16 mixer_read                      __attribute__((section(".dtcm"))) = 0;
+u16 mixer_write                     __attribute__((section(".dtcm"))) = 0;
+s16 mixer[WAVE_DIRECT_BUF_SIZE+1]   __attribute__((section(".dtcm"))) = {0};
+int breather                        __attribute__((section(".dtcm"))) = 0;
+int lastBeeper                      __attribute__((section(".dtcm"))) = 0;
+
 
 // -----------------------------------------------------------------------------------------------
 // A simplified beeper handler. Very few MSX games use the 1-bit beeper. It's mainly "lazy"
@@ -286,54 +289,97 @@ void ProcessBeeper(mm_word len, mm_addr dest)
                 toggle = len / beeperFreq;
             }
         }
-        ((s16*)dest)[(i*2)+0] += beeperTone;
-        ((s16*)dest)[(i*2)+1] += beeperTone;
+        ((s16*)dest)[i] += beeperTone;
     }
     beeperFreq = 0;
 }
 
-// -----------------------------------------------------------------------------
-// When we first enable the sound driver, there is a sharp click heard because
-// the new mixer was instantly driving the first sample up to some baseline
-// value. This routine is called when we first enable SCC or MSX-MUSIC and
-// smooths that over a bit so it's much less harsh. Basically we perform a
-// dummy sampling and then we march the last sample towards that.
-// -----------------------------------------------------------------------------
-void SmoothStartSound(mm_word len, mm_addr dest)
+
+#define SAMPLES_PER_DIRECT_CALL     2
+s16 mixbufSCC[16]       __attribute__((section(".dtcm"))) = { 0x000, 0x000, 0x000, 0x000, 0x000 , 0x000 , 0x000 , 0x000, 0x000, 0x000, 0x000, 0x000, 0x000 , 0x000 , 0x000 , 0x000 };
+u32 scc_sample_idx      __attribute__((section(".dtcm"))) = 0;
+
+ITCM_CODE void ProcessDirectAudio(void)
 {
-    ay38910Mixer(len*2, mixbuf1, &myAY);
-
-    if (msx_music_capable_game)
+    u8 bMix = 0;
+    s16 mix1[16];
+    s16 mix2[16];
+    
+    if (scc_sample_idx & 0xF0)  // To avoid call overhead, we grab 16 SCC samples at a time...
     {
-        YMMixer(len*2, mixbuf1, &myYM); // Mix on top of AY
-        memset(mixbuf2, 0x00, len*2); // Nothing more to mix...
+        SCCMixer(16, mixbufSCC, &mySCC);
+        scc_sample_idx = 0;
     }
-    else if (msx_scc_capable_game)
+    
+    if (breather) {return;}
+    
+    ay38910Mixer(SAMPLES_PER_DIRECT_CALL, mix1, &myAY);   // Always grab AY samples
+     
+    if (msx_scc_capable_game)   // If SCC enabled, grab SCC samples...
     {
-        SCCMixer(len*2, mixbuf2, &mySCC);
+        mix2[0] = mixbufSCC[scc_sample_idx++];
+        mix2[1] = mixbufSCC[scc_sample_idx++];
+        bMix = 1;
     }
-    else
+    else if (myConfig.expansion == MUSIC_2XPSG) // If 2xPSG enabled, grab those samples...
     {
-        memset(mixbuf2, 0x00, len*2); // Nothing more to mix...
+        ay38910Mixer(SAMPLES_PER_DIRECT_CALL, mix2, &myAY2);
+        mix2[0] += 32768;
+        mix2[1] += 32768;
+        bMix = 1;
+    }
+    else if (beeperFreq) // If beeper is hit and enabled, mix it in...
+    {
+        if (myConfig.expansion == MUSIC_BEEPER)
+        {
+            // This is mixed directly into mix1
+            lastBeeper ^= 0x2000;   
+            beeperFreq = 0;         
+        }
     }
 
-    // Grab the last sample...
-    s32 sound_sample = ((s32)mixbuf2[(len*2)-1]);
+    // --------------------------------------------------------------------------
+    // Now perform any mixing if needed and place samples into the output buffer.
+    // --------------------------------------------------------------------------
+    for (int i=0; i<SAMPLES_PER_DIRECT_CALL; i++)
+    {
+        if (bMix)
+        {
+            mix1[i] -= mix1[i] >> 2;
+            mix2[i] -= mix2[i] >> 2;
+            s32 combined = mix1[i] + mix2[i];
+            if (combined > 32767) combined = 32767;
+            else if (combined < -32768) combined = -32768;
+            mixer[mixer_write++] = (s16)combined;
+        }
+        else
+        {
+            mixer[mixer_write++] = mix1[i] + lastBeeper;
+        }
 
-    // Same cost as the old >>1 attenuation - just a different shift amount,
-    // so this loudness fix is free relative to what you had.
-    s32 ay_sample = (s32)mixbuf1[256] - ((s32)mixbuf1[256] >> 2);
-    sound_sample    = sound_sample - (sound_sample >> 2);
+        mixer_write &= WAVE_DIRECT_BUF_SIZE;
+        if (((mixer_write+1)&WAVE_DIRECT_BUF_SIZE) == mixer_read) {breather = (WAVE_DIRECT_BUF_SIZE>>1); return;}
+    }
+}
 
-    s32 target_sound = ay_sample + sound_sample;
+mm_word ClickRemoval(mm_word len, mm_addr dest)
+{
+    s16 mix1[16];
+    
+    ay38910Mixer(16, mix1, &myAY);  // Mix AY and give us something to move towards
+    int target = mix1[15];          // This is what we are smoothing towards
 
     s16 *p = (s16*)dest;
-    for (int i=0; i<len*2; i++)
+    for (int i=0; i<len; i++)
     {
-        if (last_sample < target_sound) last_sample += 64;
-        else last_sample -= 64;
-        *p++ = (s16)last_sample;
+        if (last_sample < (target-256)) last_sample += 256;
+        if (last_sample > (target+256)) last_sample -= 256;
+        *p++ = last_sample;
     }
+    
+    bClickRemoveNeeded = 0;
+    
+    return len;   
 }
 
 // -----------------------------------------------------------------------------------------------
@@ -345,69 +391,83 @@ ITCM_CODE mm_word OurSoundMixer(mm_word len, mm_addr dest, mm_stream_formats for
     if (soundEmuPause)  // If paused, just "mix" in mute sound chip... all channels are OFF
     {
         s16 *p = (s16*)dest;
-        for (int i=0; i<len*2; i++)
+        for (int i=0; i<len; i++)
         {
            *p++ = last_sample;      // To prevent pops and clicks... just keep outputting the last sample
         }
     }
     else
     {
+        if (bClickRemoveNeeded) return ClickRemoval(len, dest);
+        
+        s16 *p = (s16*)dest;
+        s16 local_sample = last_sample; // A tiny bit faster to move this locally
+        for (int i=0; i<len; i++)
+        {
+            if (mixer_read == mixer_write) {*p++ = local_sample;}
+            else
+            {
+                local_sample = mixer[mixer_read];
+                *p++ = local_sample;
+                mixer_read = (mixer_read + 1) & WAVE_DIRECT_BUF_SIZE;
+            }
+        }
+        if (breather) {breather -= len; if (breather < 0) breather = 0;}
+        
+        // If we need to mix in MSX-MUSIC, we grab those samples now and mix directly on top of the output
+        if (msx_music_capable_game)
+        {
+            YMMixer(len, dest, &myYM);
+        }        
+        
+        last_sample = ((s16*)dest)[len-1];
+    }
+
+    return  len;
+}
+
+// -----------------------------------------------------------------------------------------------
+// This is our main sound mixer. It's called periodically by the maxmod handler when it needs
+// more samples in the buffer. We generally produce AY output but sometimes mix in SCC or beeper.
+// -----------------------------------------------------------------------------------------------
+ITCM_CODE mm_word OurSoundMixer_Lite(mm_word len, mm_addr dest, mm_stream_formats format)
+{
+    if (soundEmuPause)  // If paused, just "mix" in mute sound chip... all channels are OFF
+    {
+        s16 *p = (s16*)dest;
+        for (int i=0; i<len; i++)
+        {
+           *p++ = last_sample;      // To prevent pops and clicks... just keep outputting the last sample
+        }
+    }
+    else
+    {
+        if (bClickRemoveNeeded) return ClickRemoval(len, dest);
+        
         if (msx_music_capable_game) // If MSX-MUSIC is enabled, we mix AY with the FM channels
         {
-            if (bFirstSoundOutput)
-            {
-                SmoothStartSound(len, dest);
-                bFirstSoundOutput = 0;
-                return len;
-            }
-
-            ay38910Mixer(len*2, dest, &myAY);
-            if (isDSiMode())
-                YMMixer(len*2, dest, &myYM);        // Normal mixer for faster DSi/XL/LL
-            else
-                YMMixerFast(len*2, dest, &myYM);    // Lower quality but faster for DS-Lite/Phat
-            last_sample = ((s16*)dest)[len*2 - 1];
+            ay38910Mixer(len, dest, &myAY);   // Get AY - we mix YM directly on top...
+            YMMixer(len, dest, &myYM);
+            last_sample = ((s16*)dest)[len-1];
         }
         else if (msx_scc_capable_game)   // If SCC is enabled, we need to mix the AY with the SCC chips
         {
-            if (bFirstSoundOutput)
-            {
-                SmoothStartSound(len, dest);
-                bFirstSoundOutput = 0;
-                return len;
-            }
-
-            ay38910Mixer(len * 2, mixbuf1, &myAY);  // Get AY samples
-            SCCMixer(len * 2, mixbuf2, &mySCC);     // Get SCC samples
+            ay38910Mixer(len, mixer, &myAY);    // Get AY samples
+            SCCMixer(len, mixer+1024, &mySCC);  // Get SCC samples
 
             // ------------------------------------------------------------------------
             // And now we need to mix them... with a bit of audio filtering on the DSi
             // ------------------------------------------------------------------------
             s16 *output = (s16*)dest;
 
-            int filterAY = isDSiMode();
-            s32 smoothed = ay_smoothed;
-
-            for (int i = 0; i < len * 2; i++)
+            for (int i = 0; i < len; i++)
             {
-                s32 ay = mixbuf1[i];
-
-                if (filterAY) // We have enough speed on the DSi to do click removal
-                {
-                    s32 diff = ay - smoothed;
-
-                    if (diff > MAX_STEP) diff = MAX_STEP;
-                    else if (diff < -MAX_STEP) diff = -MAX_STEP;
-
-                    smoothed += diff;
-                    ay = smoothed;
-                }
-
+                s32 ay = mixer[i];
                 ay -= ay >> 2;
 
-                s32 scc = mixbuf2[i];
+                s32 scc = mixer[i | 0x400];
                 scc -= scc >> 2;
-
+                
                 s32 combined = ay + scc;
 
                 if (combined > 32767) combined = 32767;
@@ -416,28 +476,19 @@ ITCM_CODE mm_word OurSoundMixer(mm_word len, mm_addr dest, mm_stream_formats for
                 output[i] = (s16)combined;
             }
 
-            if (filterAY) ay_smoothed = smoothed;
-
-            last_sample = output[len * 2 - 1];
+            last_sample = output[len-1];
         }
         else  // Pretty simple... just AY (and maybe beeper)
         {
-            if (bFirstSoundOutput)
-            {
-                SmoothStartSound(len, dest);
-                bFirstSoundOutput = 0;
-                return len;
-            }
-
-            ay38910Mixer(len * 2, dest, &myAY);
+            ay38910Mixer(len, dest, &myAY);
 
             if (myConfig.expansion == MUSIC_2XPSG) // 2x PSG enabled? If so... mix it in.
             {
-                ay38910Mixer(len * 2, mixbuf1, &myAY2);
+                ay38910Mixer(len, mixer, &myAY2);
                 s16 *p = (s16*)dest;
-                for (int i=0; i < len*2; i++)
+                for (int i=0; i < len; i++)
                 {
-                    s32 combined = p[i] + mixbuf1[i] + 32768;
+                    s32 combined = p[i] + mixer[i] + 32768;
                     if (combined > 32767)  combined = 32767;
                     else if (combined < -32768) combined = -32768;
                     p[i] = combined;
@@ -449,7 +500,7 @@ ITCM_CODE mm_word OurSoundMixer(mm_word len, mm_addr dest, mm_stream_formats for
                 ProcessBeeper(len, dest);
             }
 
-            last_sample = ((s16*)dest)[len*2 - 1];
+            last_sample = ((s16*)dest)[len-1];
         }
     }
 
@@ -478,8 +529,8 @@ void setupStream(void)
     //----------------------------------------------------------------
     myStream.sampling_rate  = sample_rate;            // sample_rate for the emulated MSX to match the AY/SCC drivers
     myStream.buffer_length  = buffer_size;            // buffer length = (512+16)
-    myStream.callback       = OurSoundMixer;          // set callback function
-    myStream.format         = MM_STREAM_16BIT_STEREO; // format = stereo 16-bit
+    myStream.callback       = (isDSiMode() ? OurSoundMixer : OurSoundMixer_Lite); // set callback function
+    myStream.format         = MM_STREAM_16BIT_MONO;   // format = mono 16-bit
     myStream.timer          = MM_TIMER0;              // use hardware timer 0
     myStream.manual         = false;                  // use automatic filling
     mmStreamOpen(&myStream);
@@ -503,39 +554,43 @@ void setupStream(void)
 // ----------------------------------------------------------------------------------
 void sound_chip_reset()
 {
-    memset(mixbuf1, 0x00, sizeof(mixbuf1));
-    memset(mixbuf2, 0x00, sizeof(mixbuf2));
+    s16 mixbuf[16];
 
-    msx_scc_capable_game = 0;
-    msx_music_capable_game = 0;
-    bFirstSoundOutput = 1;
     SoundPause();
 
+    msx_scc_capable_game = 0;        // Until proven otherwise
+    msx_music_capable_game = 0;      // Until proven otherwise
+    bFirstSoundOutput = 1;           // Wait for buffer to fill before first sound output
+    lastBeeper = 0;                  // No beeper yet
+    scc_sample_idx = 0;              // Direct Audio reset SCC sample position
+    bClickRemoveNeeded = 1;          // Smooth out sound when we transition out of pause
+    memset(mixer, 0x00, sizeof(mixer));
+    
     // -----------------------------------------------------------
     // The AY sound chip is for our baseline MSX sound handling.
     // -----------------------------------------------------------
     ay38910Reset(&myAY);             // Reset the "AY" sound chip
     ay38910IndexW(0x07, &myAY);      // Register 7 is ENABLE
     ay38910DataW(0x3F, &myAY);       // All OFF (negative logic)
-    ay38910Mixer(8, mixbuf2, &myAY); // Do an initial mix conversion to prime the output
+    ay38910Mixer(8, mixbuf, &myAY);  // Do an initial mix conversion to prime the output
     myAY.ayPortBOut = 0x80;          // Kana Lock off to start
 
     ay38910Reset(&myAY2);             // Reset the 2xPSG "AY" sound chip
     ay38910IndexW(0x07, &myAY2);      // Register 7 is ENABLE
     ay38910DataW(0x3F, &myAY2);       // All OFF (negative logic)
-    ay38910Mixer(8, mixbuf2, &myAY2); // Do an initial mix conversion to prime the output
+    ay38910Mixer(8, mixbuf, &myAY2);  // Do an initial mix conversion to prime the output
 
     // -----------------------------------------------------------------
     // The SCC sound chip is just for a few select Konami MSX1 games
     // -----------------------------------------------------------------
     SCCReset(&mySCC);
-    SCCMixer(8, mixbuf2, &mySCC);     // Do an initial mix conversion to prime the output
+    SCCMixer(8, mixbuf, &mySCC);      // Do an initial mix conversion to prime the output
 
     // -----------------------------------------------------------------
     // The YM2413 chip is the MSX MUSIC standard for late-era games...
     // -----------------------------------------------------------------
     YMReset(&myYM);
-    YMMixer(8, mixbuf2, &myYM);       // Do an initial mix conversion to prime the output
+    YMMixer(8, mixbuf, &myYM);        // Do an initial mix conversion to prime the output
 }
 
 // -----------------------------------------------------------------------
@@ -1032,6 +1087,32 @@ u8 handle_debugger_overlay(u16 iTx, u16 iTy)
     return MENU_CHOICE_NONE;
 }
 
+void PatchManbow2Screen(void)
+{
+    memset(XBuf, 0x00, 256*20);
+    memset(XBuf+(256*145), 0x00, 256*11);
+
+    memset(XBuf+(256*156), 0x00, 102);
+    memset(XBuf+(256*157), 0x00, 102);
+    memset(XBuf+(256*158), 0x00, 102);
+    memset(XBuf+(256*159), 0x00, 102);
+    memset(XBuf+(256*160), 0x00, 102);
+    memset(XBuf+(256*161), 0x00, 102);
+
+    memset(XBuf+(256*159)+137, 0x00, 1);
+    memset(XBuf+(256*161)+137, 0x00, 1);
+
+    memset(XBuf+(256*156)+156, 0x00, 100);
+    memset(XBuf+(256*157)+156, 0x00, 100);
+    memset(XBuf+(256*158)+156, 0x00, 100);
+    memset(XBuf+(256*159)+156, 0x00, 100);
+    memset(XBuf+(256*160)+156, 0x00, 100);
+    memset(XBuf+(256*161)+156, 0x00, 100);
+
+    memset(XBuf+(256*162), 0x00, 256*30);
+    Screen8_rendered = 0;
+
+}
 
 
 // ----------------------------------------------------------------------------
@@ -1140,6 +1221,13 @@ void HachibittoRunEmu(void)
         else if (timingFrames == 30)    // Every half second
         {
             DisplayStatusLine();
+        }
+        
+        // Special MANBOW 2 Screen fix-up... due to the nature of Screen 5/8 split
+        // and interlaced VRAM handling which is NOT present in Hachibitto...
+        if ((MyMedia[MEDIA_CART1].mapperType == MANBOW2) && Screen8_rendered)
+        {
+            PatchManbow2Screen();
         }
 
         // -----------------------------------------------------
@@ -2322,6 +2410,9 @@ u32 LoopZ80(void)
       }
   }
 
+  // Grab audio samples for this scanline
+  if (isDSiMode()) ProcessDirectAudio();
+
   // Run the FDC engine
   LoopFDC();
 
@@ -2341,7 +2432,7 @@ u32 LoopZ80(void)
           mid_frame_interrupt=3; // Let CPU run for 2 lines then redraw the previous 2...
       }
   }
-
+  
   // Drop out unless end of screen is reached
   if (CurLine == VDP9938_END_LINE)
   {

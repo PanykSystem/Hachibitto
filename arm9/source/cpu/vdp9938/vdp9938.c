@@ -38,6 +38,7 @@ u8 msx_irq_pending          __attribute__((section(".dtcm"))) = 0;   // Bitmask,
 u8 palette_latch            __attribute__((section(".dtcm"))) = 0;
 u16 screenPanX              __attribute__((section(".dtcm"))) = 0;   // Horizontal pan in output pixels: 0, 2, 4, ... 256
 u8 Screen8LineHasSprites    __attribute__((section(".dtcm"))) = 0;   // Sprite rendering on Scree 8 is expensive... track it
+u8 Screen8_rendered         __attribute__((section(".dtcm"))) = 0;   // If Screen 8 rendered, it might matter to patch MANBOW 2
 
 u8 frame_draw_mask[3][16]   __attribute__((section(".dtcm"))) = {
                             {1,1,1,1,1,1,1,1,   1,1,1,1,1,1,1,1},  // No frameskip: 100% (every frame drawn)
@@ -1849,6 +1850,8 @@ void RefreshLine8(u8 uY)
         uint8_t *P = RefreshBorder(uY);
         uint8_t *S = (uint8_t *) ChrTab+(((int)(uY+VScroll)<<8)&ChrTabM&0xFFFF);
         if (FlipEvenOdd && OddPage && VDP_Memory<=S-0x10000) S-=0x10000;
+        
+        Screen8_rendered = 1;
 
         memcpy(P, S, 256); // Blast all 256-pixels across into our destination buffer
 

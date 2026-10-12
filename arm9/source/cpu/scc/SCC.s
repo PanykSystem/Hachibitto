@@ -1,38 +1,46 @@
 ;@
+;@
 ;@  SCC.s
 ;@  Konami SCC+/K052539 sound chip emulator for arm32.
 ;@
 ;@  Created by Fredrik Ahlström on 2006-04-01.
 ;@  Copyright © 2006-2024 Fredrik Ahlström. All rights reserved.
 ;@
-;@  SCC+ update: see SCC.i for the address-map rationale. Summary of
-;@  what changed here vs. the original SCC driver:
-;@    - SCCMixer: Ch4 now reads its own waveform (r12 is transiently
-;@      nudged +0x20 to reach it, then restored) instead of reusing
-;@      Ch3's pointer.
-;@    - SCCWrite: wave RAM now spans 0x00-0x9F (was 0x00-0x7F), the
-;@      register block moves to 0xA0-0xAF mirrored at 0xB0-0xBF (was
-;@      0x80-0x8F mirrored at 0x90-0x9F), everything from 0xC0 up is
-;@      still the catch-all "test/deform" byte.
-;@    - SCCRead: wave read range extends to 0x00-0x9F; 0xA0-0xFF
-;@      returns 0xFF (write-only registers), matching real SCC+
-;@      "Mode::Plus" peek behavior. This needed an actual compare
-;@      instead of the original's single-shift bit-7 test, because
-;@      0xA0 isn't a power-of-two boundary the way 0x80 was.
-;@    - SCCLoadState: register replay loop now targets I/O addresses
-;@      0xA0-0xAF instead of 0x80-0x8F.
-;@    - No Real/Compatible mode switching and no deformation/rotate
-;@      register behavior are implemented, same as the original
-;@      driver - sccTestReg is storage only, matching the prior
-;@      sccTestReg's level of support.
-;@    - sccChControl (0xAF, channel enable/"key on" mask) is now actually
-;@      enforced, but at mix time rather than write time: SCCMixer checks
-;@      each channel's enable bit every sample and treats a disabled
-;@      channel as volume 0 for that sample only, without touching the
-;@      stored sccChXVolume/Freq fields at all.
-;@    - Per-channel volume is no longer applied by self-modifying the
-;@      mixer's own instructions. SCCWrite stores the precomputed volume
-;@      into the sccCh0Volume-sccCh4Volume fields and SCCMixer reads them.
+;@  What's new (SCC+ support and fast mixer):
+;@    - SCC+: Ch4 has its own waveform (wave RAM spans 0x00-0x9F), and the
+;@      register block lives at 0xA0-0xAF, mirrored at 0xB0-0xBF.
+;@      SCCRead returns 0xFF for 0xA0 and up (write-only registers).
+;@    - sccChControl (0xAF, channel enable/"key on") is enforced.
+;@    - Mixer rewritten for speed and for high notes: the old counter
+;@      could only advance one wave step per sample, which broke any
+;@      note above roughly SCC clock / (32 * SCCMULT) once SCCMULT was
+;@      raised to 128. The new design has no such limit.
+;@    - Frequency period is now F+1 ticks, as on the real chip.
+;@    - Save-state load now replays raw register values. The old code
+;@      replayed translated volumes, which came back wrong.
+;@
+;@  Mixer design:
+;@    - Each channel has a 32-bit phase accumulator (top 5 bits = wave
+;@      index, low 27 bits = fraction) and a 32-bit per-sample increment.
+;@    - The increment is computed when the frequency register is written:
+;@          inc = ((SCCMULT<<22)/(F+1))<<5     (0 if F<16, channel frozen)
+;@      so the mixer does just "phase += inc; idx = phase>>27" per channel
+;@      and handles any number of wave steps per sample at constant cost.
+;@      Periods below 16 ticks (above ~7 kHz) are frozen instead of
+;@      mixed, since they would only alias at this sample rate.
+;@    - Per-channel "effective volume" (table volume, or 0 if the channel
+;@      is disabled in sccChControl) is recomputed when a volume register
+;@      or the key-on register (0xAF) is written, so the mixer does no
+;@      per-sample enable/volume gating.
+;@    - The raw register bytes stay in the struct at 0xA0-0xAF (stored by
+;@      SCCWrite itself) and are the source of truth for save/load state.
+;@    - Mixer loop scheduling: Ch0-2 increments are held in registers for
+;@      the whole call, wave bytes are addressed as [r2 + (phase>>27) +
+;@      channel offset] so no per-channel wave base registers are needed,
+;@      and loads are interleaved with unrelated work to avoid ARM9
+;@      load-use stalls. Output is bit-identical to the simple version.
+;@
+;@  SCCMULT = chip ticks per output sample = 3579545 / output sample rate.
 ;@
 #ifdef __arm__
 
@@ -41,7 +49,6 @@
 #if !defined(SCCMULT)
 	#define SCCMULT 16
 #endif
-#define SCCADDITION 0x00004000*SCCMULT
 
 	.global SCCReset
 	.global SCCSaveState
@@ -55,6 +62,19 @@
 	.syntax unified
 	.arm
 
+;@----------------------------------------------------------------------------
+;@ Computes one channel's effective volume.
+;@ In: r0=chControl, r2=SCCptr, r3=&SCCVolume. Clobbers r1.
+;@----------------------------------------------------------------------------
+	.macro sccEffCh n
+	ldrb r1,[r2,#sccCh\n\()Volume]
+	and r1,r1,#0x0F
+	ldrb r1,[r3,r1]
+	tst r0,#(1<<\n)
+	moveq r1,#0
+	strb r1,[r2,#sccCh\n\()Eff]
+	.endm
+
 	.section .itcm
 	.align 2
 
@@ -62,14 +82,11 @@
 ;@ r0  = Mix length.
 ;@ r1  = Mixerbuffer.
 ;@ r2  = sccptr.
-;@ r3 -> r7 = pos+freq.
-;@ r8  = Sample reg/volume.
-;@ r9  = Mixer reg.
-;@ r12 = Ch3 wave base (nudged transiently to reach Ch4 wave, then restored).
-;@ lr  = Scrap.
-;@----------------------------------------------------------------------------
-//IIIIIVCCCCCCCCCCCC10FFFFFFFFFFFF
-//I=sampleindex, V=overflow, C=counter, F=frequency
+;@ r3 -> r7 = Ch0-Ch4 phase accumulators.
+;@ r8  = Increment / volume.
+;@ r9  = Mixer sum.
+;@ r10 = Ch1 wave base, r11 = Ch2 wave base, r12 = Ch3 wave base.
+;@ lr  = Scrap (wave index / sample).
 ;@----------------------------------------------------------------------------
 
 SCCMixer:					;@ r0=len, r1=dest, r2=SCCptr
@@ -77,100 +94,51 @@ SCCMixer:					;@ r0=len, r1=dest, r2=SCCptr
 ;@----------------------------------------------------------------------------
 	stmfd sp!,{r4-r11,lr}
 
-	@ The C structure starts with Ch0 wave RAM at offset 0.
-	@ The five runtime phase accumulators are at offset 0xB4.
-	@ Load them explicitly instead of advancing r2 past the wave RAM.
-	add r8,r2,#sccCh0Freq
+	add r8,r2,#sccCh0Phase
 	ldmia r8,{r3-r7}
-
-	add r10,r2,#0x20			;@ Ch1 Wave
-	add r11,r2,#0x40			;@ Ch2 Wave
-	add r12,r2,#0x60			;@ Ch3 Wave
+	ldr r10,[r2,#sccCh0Inc]		;@ Ch0-2 increments live in registers
+	ldr r11,[r2,#sccCh1Inc]
+	ldr r12,[r2,#sccCh2Inc]
 
 ;@----------------------------------------------------------------------------
 sccMixLoop:
+	ldrb r9,[r2,#sccCh0Eff]
+	add r3,r3,r10
+	ldrb r8,[r2,#sccCh1Eff]
+	add lr,r2,r3,lsr#27
+	ldrsb lr,[lr]				;@ Channel 0 (wave at +0x00)
+	add r4,r4,r11				;@ Ch1 phase (fills load delay)
+	mul r9,lr,r9
 
-	add r3,r3,#SCCADDITION
-	movs lr,r3,lsr#27
-	mov r8,r3,lsl#18
-	subcs r3,r3,r8,asr#4
+	add lr,r2,r4,lsr#27
+	ldrsb lr,[lr,#0x20]			;@ Channel 1
+	add r5,r5,r12				;@ Ch2 phase (fills load delay)
+	mla r9,r8,lr,r9
 
-	ldrb r9,[r2,#sccCh0Volume-sccStateStart]
-	ldrb r8,[r2,#sccChControl-sccStateStart]
-	tst r8,#0x01
-	moveq r9,#0
-	cmp r9,#0
-	ldrsbne lr,[r2,lr]			;@ Channel 0
-	mulne r9,lr,r9
+	ldrb r8,[r2,#sccCh2Eff]
+	add lr,r2,r5,lsr#27
+	ldrsb lr,[lr,#0x40]			;@ Channel 2
+	subs r0,r0,#1				;@ fills load delay; flags survive to the end
+	mla r9,r8,lr,r9
 
+	ldr lr,[r2,#sccCh3Inc]
+	ldrb r8,[r2,#sccCh3Eff]
+	add r6,r6,lr
+	add lr,r2,r6,lsr#27
+	ldrsb lr,[lr,#0x60]			;@ Channel 3
+	mla r9,r8,lr,r9
 
-	add r4,r4,#SCCADDITION
-	movs lr,r4,lsr#27
-	mov r8,r4,lsl#18
-	subcs r4,r4,r8,asr#4
+	ldr lr,[r2,#sccCh4Inc]
+	ldrb r8,[r2,#sccCh4Eff]
+	add r7,r7,lr
+	add lr,r2,r7,lsr#27
+	ldrsb lr,[lr,#0x80]			;@ Channel 4
+	mla r9,r8,lr,r9
 
-	ldrb r8,[r2,#sccChControl-sccStateStart]
-	tst r8,#0x02
-	ldrb r8,[r2,#sccCh1Volume-sccStateStart]
-	moveq r8,#0
-	cmp r8,#0
-	ldrsbne lr,[r10,lr]			;@ Channel 1
-	mlane r9,r8,lr,r9
-
-
-	add r5,r5,#SCCADDITION
-	movs lr,r5,lsr#27
-	mov r8,r5,lsl#18
-	subcs r5,r5,r8,asr#4
-
-	ldrb r8,[r2,#sccChControl-sccStateStart]
-	tst r8,#0x04
-	ldrb r8,[r2,#sccCh2Volume-sccStateStart]
-	moveq r8,#0
-	cmp r8,#0
-	ldrsbne lr,[r11,lr]			;@ Channel 2
-	mlane r9,r8,lr,r9
-
-
-	add r6,r6,#SCCADDITION
-	movs lr,r6,lsr#27
-	mov r8,r6,lsl#18
-	subcs r6,r6,r8,asr#4
-
-	ldrb r8,[r2,#sccChControl-sccStateStart]
-	tst r8,#0x08
-	ldrb r8,[r2,#sccCh3Volume-sccStateStart]
-	moveq r8,#0
-	cmp r8,#0
-	ldrsbne lr,[r12,lr]			;@ Channel 3
-	mlane r9,r8,lr,r9
-
-
-	add r7,r7,#SCCADDITION
-	movs lr,r7,lsr#27
-	mov r8,r7,lsl#18
-	subcs r7,r7,r8,asr#4
-
-	add r12,r12,#0x20			;@ Ch3 Wave base -> Ch4 Wave base
-
-	ldrb r8,[r2,#sccChControl-sccStateStart]
-	tst r8,#0x10
-	ldrb r8,[r2,#sccCh4Volume-sccStateStart]
-	moveq r8,#0
-	cmp r8,#0
-	ldrsbne lr,[r12,lr]			;@ Channel 4, own waveform
-	mlane r9,r8,lr,r9
-
-	sub r12,r12,#0x20			;@ restore Ch3 Wave base
-
-
-	subs r0,r0,#1
 	strhpl r9,[r1],#2
 	bhi sccMixLoop
 
-	@ Store the five runtime phase accumulators back to
-	@ their actual locations in the C structure at 0xB4.
-	add r8,r2,#sccCh0Freq
+	add r8,r2,#sccCh0Phase
 	stmia r8,{r3-r7}
 
 	ldmfd sp!,{r4-r11,lr}
@@ -190,13 +158,6 @@ SCCReset:					;@ r0=SCCptr
 	mov r2,#sccSize
 	bl memset					;@ clear variables
 	ldmfd sp!,{r0,lr}
-
-	mov r1,#0x20
-	strb r1,[r0,#sccCh0Freq+1]
-	strb r1,[r0,#sccCh1Freq+1]
-	strb r1,[r0,#sccCh2Freq+1]
-	strb r1,[r0,#sccCh3Freq+1]
-	strb r1,[r0,#sccCh4Freq+1]
 
 	bx lr
 
@@ -227,10 +188,10 @@ SCCLoadState:					;@ In r0=SCCptr, r1=source. Out r0=state size.
 stateLoop:
 	add r2,r4,#sccStateStart
 	add r1,r5,#0xA0
-	ldrb r0,[r2,r1]
+	ldrb r0,[r2,r1]				;@ raw register byte
 
 	mov r2,r4
-	bl SCCWrite
+	bl SCCWrite					;@ replays: rebuilds Inc and Eff fields
 
 	subs r5,r5,#1
 	bpl stateLoop
@@ -247,6 +208,19 @@ SCCGetStateSize:				;@ Out r0=state size.
 ;@----------------------------------------------------------------------------
 SCCVolume:
 	.byte 0,3,7,10,14,17,20,24,27,31,34,37,41,44,48,51
+
+;@----------------------------------------------------------------------------
+sccUpdateEff:					;@ r2=SCCptr. Recompute all 5 effective volumes.
+;@ Used for volume writes (0xAA-0xAE) and key-on writes (0xAF).
+;@----------------------------------------------------------------------------
+	ldrb r0,[r2,#sccChControl]
+	adr r3,SCCVolume
+	sccEffCh 0
+	sccEffCh 1
+	sccEffCh 2
+	sccEffCh 3
+	sccEffCh 4
+	bx lr
 
 ;@----------------------------------------------------------------------------
 SCCRead:					;@ 0x9800-0x9FFF, r0=adr, r1=SCCptr
@@ -271,7 +245,7 @@ SCCWrite:					;@ 0x9800-0x9FFF, r0=val, r1=adr, r2=SCCptr
 
 	add r3,r2,#sccCh0Wave
 
-	strbmi r0,[r3,r1]
+	strbmi r0,[r3,r1]			;@ raw byte into struct (wave RAM + regs 0xA0-0xAF)
 	strbpl r0,[r2,#sccTestReg]
 
 	bxpl lr
@@ -280,146 +254,63 @@ SCCWrite:					;@ 0x9800-0x9FFF, r0=val, r1=adr, r2=SCCptr
 	ldrpl pc,[pc,r1,lsl#2]
 	bx lr
 
-	.long sccCh0FreqLW
-	.long sccCh0FreqHW
-	.long sccCh1FreqLW
-	.long sccCh1FreqHW
-	.long sccCh2FreqLW
-	.long sccCh2FreqHW
-	.long sccCh3FreqLW
-	.long sccCh3FreqHW
-	.long sccCh4FreqLW
-	.long sccCh4FreqHW
-	.long sccCh0VolW
-	.long sccCh1VolW
-	.long sccCh2VolW
-	.long sccCh3VolW
-	.long sccCh4VolW
-	.long sccKeyOnW
+	.long sccFreq0				;@ 0xA0 Ch0 freq low
+	.long sccFreq0				;@ 0xA1 Ch0 freq high
+	.long sccFreq1
+	.long sccFreq1
+	.long sccFreq2
+	.long sccFreq2
+	.long sccFreq3
+	.long sccFreq3
+	.long sccFreq4
+	.long sccFreq4
+	.long sccUpdateEff			;@ 0xAA Ch0 volume
+	.long sccUpdateEff			;@ 0xAB Ch1 volume
+	.long sccUpdateEff			;@ 0xAC Ch2 volume
+	.long sccUpdateEff			;@ 0xAD Ch3 volume
+	.long sccUpdateEff			;@ 0xAE Ch4 volume
+	.long sccUpdateEff			;@ 0xAF channel enable / key-on
 
 ;@----------------------------------------------------------------------------
-sccCh0FreqLW:
-	strb r0,[r2,#sccCh0Freq]
-	bx lr
+sccFreq0:
+	mov r1,#0
+	b sccUpdateInc
+sccFreq1:
+	mov r1,#1
+	b sccUpdateInc
+sccFreq2:
+	mov r1,#2
+	b sccUpdateInc
+sccFreq3:
+	mov r1,#3
+	b sccUpdateInc
+sccFreq4:
+	mov r1,#4
+;@ fall through
 
 ;@----------------------------------------------------------------------------
-sccCh0FreqHW:
-	ldrb r1,[r2,#sccCh0Freq+1]
-	and r0,r0,#0x0F
-	bic r1,r1,#0x0F
-	orr r1,r1,r0
-	strb r1,[r2,#sccCh0Freq+1]
-	bx lr
-
+sccUpdateInc:					;@ r1=channel (0-4), r2=SCCptr
+;@ inc = ((SCCMULT<<22)/(F+1))<<5, or 0 if F<16 (too fast, channel frozen).
+;@ F is the 12-bit frequency from the raw register bytes at 0xA0+2*ch.
 ;@----------------------------------------------------------------------------
-sccCh1FreqLW:
-	strb r0,[r2,#sccCh1Freq]
+	stmfd sp!,{r2,r4,r5,lr}		;@ 16 bytes, keeps stack 8-byte aligned
+	add r4,r2,r1,lsl#2
+	add r4,r4,#sccCh0Inc			;@ r4 = &inc[ch]
+	add r3,r2,r1,lsl#1
+	ldrh r1,[r3,#sccCh0Frq]
+	bic r1,r1,#0xF000				;@ F = low 12 bits
+	mov r0,#0
+	cmp r1,#16
+	blo 1f
+	add r1,r1,#1					;@ divisor = F+1
+	ldr r0,=(SCCMULT<<22)
+	bl __aeabi_uidiv				;@ or your hardware divider wrapper
+	mov r0,r0,lsl#5
+1:
+	str r0,[r4]
+	ldmfd sp!,{r2,r4,r5,lr}
 	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh1FreqHW:
-	ldrb r1,[r2,#sccCh1Freq+1]
-	and r0,r0,#0x0F
-	bic r1,r1,#0x0F
-	orr r1,r1,r0
-	strb r1,[r2,#sccCh1Freq+1]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh2FreqLW:
-	strb r0,[r2,#sccCh2Freq]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh2FreqHW:
-	ldrb r1,[r2,#sccCh2Freq+1]
-	and r0,r0,#0x0F
-	bic r1,r1,#0x0F
-	orr r1,r1,r0
-	strb r1,[r2,#sccCh2Freq+1]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh3FreqLW:
-	strb r0,[r2,#sccCh3Freq]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh3FreqHW:
-	ldrb r1,[r2,#sccCh3Freq+1]
-	and r0,r0,#0x0F
-	bic r1,r1,#0x0F
-	orr r1,r1,r0
-	strb r1,[r2,#sccCh3Freq+1]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh4FreqLW:
-	strb r0,[r2,#sccCh4Freq]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh4FreqHW:
-	ldrb r1,[r2,#sccCh4Freq+1]
-	and r0,r0,#0x0F
-	bic r1,r1,#0x0F
-	orr r1,r1,r0
-	strb r1,[r2,#sccCh4Freq+1]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh0VolW:
-	ands r0,r0,#0x0F
-	ldrbne r1,[r2,#sccChControl]
-	andsne r1,r1,#0x01
-	adrne r1,SCCVolume
-	ldrbne r0,[r1,r0]
-	strb r0,[r2,#sccCh0Volume]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh1VolW:
-	ands r0,r0,#0x0F
-	ldrbne r1,[r2,#sccChControl]
-	andsne r1,r1,#0x02
-	adrne r1,SCCVolume
-	ldrbne r0,[r1,r0]
-	strb r0,[r2,#sccCh1Volume]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh2VolW:
-	ands r0,r0,#0x0F
-	ldrbne r1,[r2,#sccChControl]
-	andsne r1,r1,#0x04
-	adrne r1,SCCVolume
-	ldrbne r0,[r1,r0]
-	strb r0,[r2,#sccCh2Volume]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh3VolW:
-	ands r0,r0,#0x0F
-	ldrbne r1,[r2,#sccChControl]
-	andsne r1,r1,#0x08
-	adrne r1,SCCVolume
-	ldrbne r0,[r1,r0]
-	strb r0,[r2,#sccCh3Volume]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccCh4VolW:
-	ands r0,r0,#0x0F
-	ldrbne r1,[r2,#sccChControl]
-	andsne r1,r1,#0x10
-	adrne r1,SCCVolume
-	ldrbne r0,[r1,r0]
-	strb r0,[r2,#sccCh4Volume]
-	bx lr
-
-;@----------------------------------------------------------------------------
-sccKeyOnW:					;@ 0xAF - channel enable/"key on" mask
-	bx lr
+	.ltorg
 
 ;@----------------------------------------------------------------------------
 	.end

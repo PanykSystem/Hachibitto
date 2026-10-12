@@ -651,6 +651,56 @@ void HandleKonamiSCC8(u32* src, u8 block, u16 address, u8 value)
     }
 }
 
+// --------------------------------------------------------------------------------------
+// Very much like Konami SCC but without mirrors and with flash write possibilities...
+// TODO: Handle AMD flash write commands. Until then, only patched/hacked Manbow 2 runs.
+// --------------------------------------------------------------------------------------
+void HandleManbow2(u32* src, u8 block, u16 address, u8 value)
+{
+    u8 media_id = bCartInPage[address>>14] - 1;
+    
+    if ((address & 0xF800) == 0x5000)
+    {
+        MSXCartPtr[media_id][2] = (u8*)src;  // Main ROM
+        MemoryMap[2] = (u8 *)(MSXCartPtr[media_id][2]) - 0x4000;
+    }
+    else if ((address & 0xF800) == 0x7000)
+    {
+        MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
+        MemoryMap[3] = (u8 *)(MSXCartPtr[media_id][3]) - 0x6000;
+    }
+    else if ((address & 0xF800) == 0x9000)
+    {
+        // --------------------------------------------------------------------------------------------------
+        // For standard SCC carts we require the full 0x3F to be programmed to enable the SCC register view.
+        // And yes, the banking logic below is still always called...
+        // --------------------------------------------------------------------------------------------------
+        if ((value & 0x3F) == 0x3F)
+        {
+            special_memory_access |= SPEC_MEM_SCC_ENABLED;  // SCC Registers are now "in view"
+            if (!msx_scc_capable_game)
+            {
+                msx_scc_capable_game = true;                 // SCC sound - set a flag so we process this special sound chip for this game
+                bFirstSoundOutput = 1;
+            }
+        }
+        else
+        {
+            special_memory_access &= ~SPEC_MEM_SCC_ENABLED; // SCC Registers are no longer "in view"
+        }
+
+        MSXCartPtr[media_id][4] = (u8*)src;  // Main ROM
+        MemoryMap[4] = (u8 *)(MSXCartPtr[media_id][4]) - 0x8000;
+    }
+    else if ((address & 0xF800) == 0xB000)
+    {
+        MSXCartPtr[media_id][5] = (u8*)src;  // Main ROM
+        MemoryMap[5] = (u8 *)(MSXCartPtr[media_id][5]) - 0xA000;
+    }
+}
+
+
+
 // ---------------------------------------------------------------------
 // Xevious and a few other related games have special cart mapping...
 // ---------------------------------------------------------------------
@@ -1360,6 +1410,20 @@ ITCM_CODE void cpu_writemem16(u16 address, u8 value)
         else if (MyMedia[media_id].mapperType == XEVIOUS)
         {
             HandleXevious(src, block, address);
+        }
+        else if (MyMedia[media_id].mapperType == MANBOW2)
+        {
+            // -----------------------------------------------------------------------------------
+            // Are we writing to the SCC chip memory mapped area and are the registers "in view"?
+            // -----------------------------------------------------------------------------------
+            if ((special_memory_access & SPEC_MEM_SCC_ENABLED) && ((address & 0xF800) == 0x9800))
+            {
+                 SCC_LegacyWrite(value, address&0xFF);
+            }
+            else // We only handle bank switching if the SCC registers were not accessed above...
+            {
+                HandleManbow2(src, block, address, value);
+            }
         }
         else if (MyMedia[media_id].mapperType == MAJUT)
         {

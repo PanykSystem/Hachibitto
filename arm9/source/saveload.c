@@ -25,7 +25,7 @@
 #include "lzav.h"
 #include "printf.h"
 
-#define MSX_SAVE_VER   0x000D  // Change this if the basic format of the .SAV file changes. Invalidates older .sav files.
+#define MSX_SAVE_VER   0x000E  // Change this if the basic format of the .SAV file changes. Invalidates older .sav files.
 
 // -----------------------------------------------------------------------------------------------------
 // Since the main MemoryMap[] can point to differt things (RAM, ROM, BIOS, etc) and since we can't rely
@@ -42,12 +42,11 @@ struct RomOffset Offsets[8];
 
 #define TYPE_ROM        0
 #define TYPE_RAM        1
-#define TYPE_SCC        2
-#define TYPE_FDC        3
-#define TYPE_BIOS       4
-#define TYPE_EBIOS      5
-#define TYPE_MSXMUSIC   6
-#define TYPE_SRAM       7
+#define TYPE_FDC        2
+#define TYPE_BIOS       3
+#define TYPE_EBIOS      4
+#define TYPE_MSXMUSIC   5
+#define TYPE_SRAM       6
 #define TYPE_OTHER      9
 
 static char szLoadFile[256];        // We build the filename out of the base filename and tack on .sav, .ee, etc.
@@ -135,11 +134,6 @@ void msxSaveState(void)
                 Offsets[i].type = TYPE_SRAM;
                 Offsets[i].offset = shifted_offset - SRAM_Memory;
             }
-            else if ((shifted_offset >= SCC_Memory) && (shifted_offset < SCC_Memory+(sizeof(SCC_Memory))))
-            {
-                Offsets[i].type = TYPE_SCC;
-                Offsets[i].offset = shifted_offset - SCC_Memory;
-            }
             else if ((shifted_offset >= BIOS_Memory) && (shifted_offset < BIOS_Memory+(sizeof(BIOS_Memory))))
             {
                 Offsets[i].type = TYPE_BIOS;
@@ -175,11 +169,6 @@ void msxSaveState(void)
             {
                 Offsets[i].type = TYPE_SRAM;
                 Offsets[i].offset = MSXCartPtr[MEDIA_CART1][i] - SRAM_Memory;
-            }
-            else if ((MSXCartPtr[MEDIA_CART1][i] >= SCC_Memory) && (MSXCartPtr[MEDIA_CART1][i] < SCC_Memory+(sizeof(SCC_Memory))))
-            {
-                Offsets[i].type = TYPE_SCC;
-                Offsets[i].offset = MSXCartPtr[MEDIA_CART1][i] - SCC_Memory;
             }
             else
             {
@@ -309,11 +298,19 @@ void msxSaveState(void)
         if (retVal) retVal = fwrite(&spare,                 sizeof(spare),                  1, handle);
         if (retVal) retVal = fwrite(&spare,                 sizeof(spare),                  1, handle);
 
-        // -----------------------------------------------------------------------
-        // Compress the 128K RAM data using 'high' compression ratio...
-        // -----------------------------------------------------------------------
-        int max_len = lzav_compress_bound_hi( sizeof(RAM_Memory) );
-        int comp_len = lzav_compress_hi( RAM_Memory, COMPRESS_BUFFER, sizeof(RAM_Memory), max_len );
+        // --------------------------------------------------------------------------------------------
+        // Compress the 256K RAM data using 'high' compression ratio... We do this in two 128K chunks.
+        // --------------------------------------------------------------------------------------------
+        int max_len = lzav_compress_bound_hi( 0x20000 );
+        int comp_len = lzav_compress_hi( RAM_Memory, COMPRESS_BUFFER, 0x20000, max_len );
+
+        if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
+        if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
+
+        // --------------------------------------------------------------------------------------------
+        // Compress the 256K RAM data using 'high' compression ratio... We do this in two 128K chunks.
+        // --------------------------------------------------------------------------------------------
+        comp_len = lzav_compress_hi( RAM_Memory+0x20000, COMPRESS_BUFFER, 0x20000, max_len );
 
         if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
         if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
@@ -323,15 +320,6 @@ void msxSaveState(void)
         // -----------------------------------------------------------------------
         max_len = lzav_compress_bound_hi( sizeof(VDP_Memory) );
         comp_len = lzav_compress_hi( VDP_Memory, COMPRESS_BUFFER, sizeof(VDP_Memory), max_len );
-
-        if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
-        if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
-
-        // -----------------------------------------------------------------------
-        // Compress the 64K SRAM data using 'high' compression ratio...
-        // -----------------------------------------------------------------------
-        max_len = lzav_compress_bound_hi( sizeof(SCC_Memory) );
-        comp_len = lzav_compress_hi( SCC_Memory, COMPRESS_BUFFER, sizeof(SCC_Memory), max_len );
 
         if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
         if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
@@ -558,13 +546,17 @@ void msxLoadState(void)
             if (retVal) retVal = fread(&spare,                 sizeof(spare),                  1, handle);
             if (retVal) retVal = fread(&spare,                 sizeof(spare),                  1, handle);
 
-            // -----------------------------------------------------------------------
-            // Restore Main RAM memory which was saved in a compressed format
-            // -----------------------------------------------------------------------
+            // -----------------------------------------------------------------------------------
+            // Restore Main RAM memory which was saved in a compressed format. Two chunks of 128K.
+            // -----------------------------------------------------------------------------------
             int comp_len = 0;
             if (retVal) retVal = fread(&comp_len,               sizeof(comp_len), 1, handle);
             if (retVal) retVal = fread(COMPRESS_BUFFER,         comp_len,         1, handle);
-            (void)lzav_decompress( COMPRESS_BUFFER, RAM_Memory, comp_len, sizeof(RAM_Memory));
+            (void)lzav_decompress( COMPRESS_BUFFER, RAM_Memory, comp_len, 0x20000);
+
+            if (retVal) retVal = fread(&comp_len,               sizeof(comp_len), 1, handle);
+            if (retVal) retVal = fread(COMPRESS_BUFFER,         comp_len,         1, handle);
+            (void)lzav_decompress( COMPRESS_BUFFER, RAM_Memory+0x20000, comp_len, 0x20000);
 
             // -----------------------------------------------------------------------
             // Restore VDP RAM memory which was saved in a compressed format
@@ -572,13 +564,6 @@ void msxLoadState(void)
             if (retVal) retVal = fread(&comp_len,               sizeof(comp_len), 1, handle);
             if (retVal) retVal = fread(COMPRESS_BUFFER,         comp_len,         1, handle);
             (void)lzav_decompress( COMPRESS_BUFFER, VDP_Memory, comp_len, sizeof(VDP_Memory));
-
-            // -----------------------------------------------------------------------
-            // Restore SRAM memory which was saved in a compressed format
-            // -----------------------------------------------------------------------
-            if (retVal) retVal = fread(&comp_len,                sizeof(comp_len), 1, handle);
-            if (retVal) retVal = fread(COMPRESS_BUFFER,          comp_len,         1, handle);
-            (void)lzav_decompress( COMPRESS_BUFFER, SCC_Memory,  comp_len, sizeof(SCC_Memory));
         }
 
         fclose(handle);
