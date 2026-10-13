@@ -621,7 +621,7 @@ void HandleKonamiSCC8(u32* src, u8 block, u16 address, u8 value)
             if (!msx_scc_capable_game)
             {
                 msx_scc_capable_game = true;                 // SCC sound - set a flag so we process this special sound chip for this game
-                bFirstSoundOutput = 1;
+                bClickRemoveNeeded = 1;
             }
         }
         else
@@ -681,7 +681,7 @@ void HandleManbow2(u32* src, u8 block, u16 address, u8 value)
             if (!msx_scc_capable_game)
             {
                 msx_scc_capable_game = true;                 // SCC sound - set a flag so we process this special sound chip for this game
-                bFirstSoundOutput = 1;
+                bClickRemoveNeeded = 1;
             }
         }
         else
@@ -1188,7 +1188,7 @@ void HandleSCCPlusModeRegister(u8 value)
         if (!msx_scc_capable_game)
         {
             msx_scc_capable_game = true;                 // SCC sound - set a flag so we process this special sound chip for this game
-            bFirstSoundOutput = 1;
+            bClickRemoveNeeded = 1;
         }
     }
 

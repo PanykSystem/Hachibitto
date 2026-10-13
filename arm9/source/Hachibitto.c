@@ -62,10 +62,9 @@ volatile u32 dsVSyncCount = 0;  // So compiler doesn't cache this as it changes 
 u32 last_vsync_count    __attribute__((section(".dtcm"))) = 0xFEEDBEEF;
 s8  temp_offset         __attribute__((section(".dtcm"))) = 0;
 u8  slide_dampen        __attribute__((section(".dtcm"))) = 0;
-u8  bFirstSoundOutput   __attribute__((section(".dtcm"))) = 1;
 u8  skip_render         __attribute__((section(".dtcm"))) = 0;
 u8  zoom_screen         __attribute__((section(".dtcm"))) = 0;
-u8  bClickRemoveNeeded  __attribute__((section(".dtcm"))) = 0;
+u8  bClickRemoveNeeded  __attribute__((section(".dtcm"))) = 1;
 
 // -------------------------------------------------------------------------------------------
 // The MSX systems have ROM, RAM, BIOS, Music Carts or SRAM. So we create generic buffers
@@ -365,8 +364,22 @@ ITCM_CODE void ProcessDirectAudio(void)
 mm_word ClickRemoval(mm_word len, mm_addr dest)
 {
     s16 mix1[16];
+    s16 mix2[16];
     
     ay38910Mixer(16, mix1, &myAY);  // Mix AY and give us something to move towards
+    if (msx_music_capable_game)
+    {
+        YMMixer(16, mix1, &myYM); // Mix directly on top of AY
+    }
+    else if (msx_scc_capable_game)
+    {
+        SCCMixer(16, mix2, &mySCC);  // Get SCC samples
+        s32 sample = mix1[15] + mix2[15];
+        if (sample > 32767) sample = 32767;
+        if (sample < -32767) sample = -32767;
+        mix1[15] = sample;        
+    }
+        
     int target = mix1[15];          // This is what we are smoothing towards
 
     s16 *p = (s16*)dest;
@@ -395,6 +408,7 @@ ITCM_CODE mm_word OurSoundMixer(mm_word len, mm_addr dest, mm_stream_formats for
         {
            *p++ = last_sample;      // To prevent pops and clicks... just keep outputting the last sample
         }
+        bClickRemoveNeeded = 1;
     }
     else
     {
@@ -439,6 +453,7 @@ ITCM_CODE mm_word OurSoundMixer_Lite(mm_word len, mm_addr dest, mm_stream_format
         {
            *p++ = last_sample;      // To prevent pops and clicks... just keep outputting the last sample
         }
+        bClickRemoveNeeded = 1;
     }
     else
     {
@@ -560,7 +575,6 @@ void sound_chip_reset()
 
     msx_scc_capable_game = 0;        // Until proven otherwise
     msx_music_capable_game = 0;      // Until proven otherwise
-    bFirstSoundOutput = 1;           // Wait for buffer to fill before first sound output
     lastBeeper = 0;                  // No beeper yet
     scc_sample_idx = 0;              // Direct Audio reset SCC sample position
     bClickRemoveNeeded = 1;          // Smooth out sound when we transition out of pause

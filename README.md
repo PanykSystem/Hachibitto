@@ -70,12 +70,12 @@ Options :
 * Joystick - Generally leave at 'Normal' but can be set to 'Diagonals' for Q-Bert games or 'Slilde-n-Glide' to help make turns onto ladders easier for games like Chuckie Egg. 
 * Split Timing - The horizontal line interrupt split is tricky in emulation. To help avoid visual artifacts, this can be set to smooth over 1 or 2 lines. Play with it if you see visual artifacts on the split between static/score area and scrolling area on any game.
 * CPU Speed - Generally leave at 'Normal' but you can boost any game by 10% or 20% to give more CPU cycles per line while maintaining the same VDP interrupt rate. Helps games like Aleste and Zanac from slowing down.
-* Music Expand - Can use this to enable SCC+ simulated cart (for Snatcher) or MSX-MUSIC for the games that take advantage of it. Many games will auto-configure.
-* Beeper - some "lazy" ZX Spectrum ports still use the 1-bit speaker output. It costs emulated CPU time so it's not universally enabled. 
+* Expansion - Can use this to enable SCC+ simulated cart (for Snatcher) or MSX-MUSIC for the games that take advantage of it. Many games will auto-configure this.
 * Y-Offset - used to shift the screen up or down. Even easier is to use the Right Shoulder Button + UP/DOWN on the d-pad to shift the screen.  Buttons X/Y will pan up or down.
 * Screen Scale - can be used to compress 212 scanline games down to 192. Generally recommended to use Pan UP/DOWN instead as compression will obviously drop some scanlines.
 * Border Mask - can be used to hide the left/right 8 pixels so games that scroll "choppy" are a bit less visually bothersome.
 * Frameskip - on the DSi or above, should default to 'None' and you can leave it there... every game locks in at 60Hz. For the older hardware, some light frameskip is required.
+* YM Balance - normally set to 'HIGH' for 1:1 mixing with the normal AY PSG but this can sometimes sound too 'hot' for some games (e.g. Xak I) and so MEDIUM and LOW mixing is sometimes required.
 
 Screen Zoom :
 -----------------------
@@ -88,8 +88,8 @@ When zoomed, use the Left/Right shoulder buttons to pan the screen left and righ
 
 Known Issues :
 -----------------------
-* MSX-MUSIC is vastly simplified processing so that it will run on the older DS hardware. On DSi/XL/LL, the sound is passable but nowhere near authentic (and in a few games is downright terrible).
-
+* MSX-MUSIC is complicated and consumes quite a bit of the DS CPU horsepower. As such, the Yamaha YM2413 / OPLL implementation is vastly simplified. It only runs full-speed on the DSi or above with the 2X CPU. Do not judge MSX-MUSIC harshly based on this emulator's ability.
+* Manbow 2 requires one of the hacks that does not try to address the flash chip (look for the "60Hz Patch" as one that works).
 
 The Hachibitto HB-8 Fantasy Console :
 -----------------------
@@ -103,6 +103,10 @@ The Hachibitto HB-8 Fantasy Console :
 
 Version History :
 -----------------------
+Version 1.4b - 13-Oct-2026 by wavemotion-dave
+* Hotfix for MSX-MUSIC with new sound rebalance configuration for games like XAK I.
+* DS-Lite now defaults to PSG over MSX-MUSIC due to CPU constraints.
+
 Version 1.4 - 12-Oct-2026 by wavemotion-dave
 * New megarom mappers supported. Game Master 2 with SRAM now works. KOEI with 32K SRAM now works. Wizardry now works.
 * Quit Icon added to main menu screen.

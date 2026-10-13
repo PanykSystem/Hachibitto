@@ -22,7 +22,7 @@
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
 #define MAX_CONFIGS                 2048
-#define CONFIG_VER                  0x0013
+#define CONFIG_VER                  0x0014
 
 #define MSXROM                      0x01
 #define DIRECTORY                   0x02
@@ -83,6 +83,8 @@ struct __attribute__((__packed__)) Config_t
     u8  scaleScreen;
     u8  maskBorders;
     u8  frameSkip;
+    u8  ymScale;
+    u8  reserved0;
     u8  reserved1;
     u8  reserved2;
     u8  reserved3;
@@ -108,6 +110,10 @@ struct __attribute__((__packed__)) Config_t
 #define FS_NONE                     0       // No Frame Skip
 #define FS_LIGHT                    1       // Light Frame Skip
 #define FS_AGGRESSIVE               2       // Aggressive Frame Skip
+
+#define YM_BAL_LOW                  1       // Low YM volume mix
+#define YM_BAL_MED                  2       // Medium YM volume mix
+#define YM_BAL_HIGH                 3       // High (normal) YM volume mix
 
 extern struct Config_t       myConfig;
 extern struct GlobalConfig_t myGlobalConfig;
@@ -213,8 +219,8 @@ extern AY38910 myAY2;
 extern SCC     mySCC;
 extern YM      myYM;
 extern u8 msx_scc_enable;
-extern u8 bFirstSoundOutput;
 extern u8 JoyMode;
+extern u8 bClickRemoveNeeded;
 extern u32 JoyState;
 extern u8 Port_PPI_A;
 extern u8 Port_PPI_B;

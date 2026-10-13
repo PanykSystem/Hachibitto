@@ -12,9 +12,8 @@
 //
 //  msx_music.c
 //  MSX-MUSIC (Yamaha YM2413 / OPLL) sound chip emulator - music only.
-//  The normal/DSi mixer uses a simplified two-operator FM path with per-operator
-//  attack/decay/sustain/release states. The DS-Lite fast mixer retains a cheaper
-//  single-oscillator gain model. Neither path is a cycle-accurate OPLL core.
+//  The mixer uses a simplified two-operator FM path with per-operator
+//  attack/decay/sustain/release states. This is not a cycle-accurate OPLL core.
 //
 //  Please note: this file was largely generated with Claude.AI and ChatGPT with a lot
 //  of patience (and frustration) by the author. Sound drivers are not my specialty...
@@ -23,6 +22,7 @@
 //  this - please be my guest!
 
 #include "msx_music.h"
+#include "MSX_generic.h"
 #include <string.h>    // memcpy, memset
 
 //@----------------------------------------------------------------------------
@@ -31,28 +31,23 @@
 #define YM_SAMPLE_RATE             31000     // confirmed value, matches the AY driver's rate
 #define YM_MASTER_CLOCK            3579545   // MSX standard clock, same as SCC's
 #define YM_SIN_SHIFT               24        // phase>>24 -> 8-bit (256 entry) table index
-#define YM_GAIN_RAMP_STEP          16        // Legacy fast-mixer/rhythm gain ramp toward full
-                                             // level on key-on; the normal FM path has operator envelopes.
+#define YM_GAIN_RAMP_STEP          16        // Gain ramp toward full level on key-on.
 #define YM_PERCUSSION_RELEASE_STEP 6300      // PERCUSSION release rate: higher = faster decay
                                              // for more distinct drum hits.
 
-/* Legacy fast-mixer carrier sustain approximation: map OPLL SL to gain levels
-   and move toward the target slowly. The normal FM path uses operator envelopes. */
+/* Linear amplitude factors for the OPLL's 3 dB-per-step channel volume. */
 static   u8 YM_SustainGain[16] __attribute__((section(".dtcm"))) =
 {
-    255, 181, 128, 90, 64, 45, 32, 22,
-     16,  11,   8,  5,  4,  2,  1,  0
+    255, 181, 128, 90, 64, 45, 32, 22, 16,  11,   8,  5,  4,  2,  1,  0
 };
 #define YM_SUSTAIN_TICK_SAMPLES 64  // Samples between sustain-level gain reductions
 
-#define YM_OUT_SHIFT  8     // Output scaling for the legacy fast-mixer and rhythm paths.
-                            // The normal/DSi two-operator FM path scales its output separately.
+#define YM_OUT_SHIFT  8     // Output scaling for the mixer and rhythm paths.
+                            // The FM path scales its output separately.
 
 //@----------------------------------------------------------------------------
-//@ 256-entry soft-square-like waveform table, amplitude -127..127. It supplies
-//@ additional harmonics for the carrier in the normal FM path and the legacy
-//@ single-oscillator path. The normal FM renderer also uses a separate sine
-//@ table for its modulator, so this is not the only per-sample table lookup.
+//@ 256-entry soft-square-like carrier waveform table, amplitude -127..127.
+//@ The modulator uses a separate sine table.
 //@----------------------------------------------------------------------------
 static   s8 YM_SinTable[256] __attribute__((section(".dtcm"))) =
 {
@@ -76,7 +71,7 @@ static   s8 YM_SinTable[256] __attribute__((section(".dtcm"))) =
 
 /*
  * Sine lookup used by the normal FM path's modulator and by the tonal rhythm
- * voices. It is separate from YM_SinTable (the carrier/legacy waveform); the
+ * voices. It is separate from YM_SinTable (the carrier waveform); the
  * tables are not blended. Stored in DTCM for fast audio-rate access.
  */
 static   s8 YM_CarrierSineTable[256] __attribute__((section(".dtcm"))) =
@@ -108,10 +103,9 @@ static   u8 YM_MulTableX2[16] __attribute__((section(".dtcm"))) =
 };
 
 //@----------------------------------------------------------------------------
-//@ 16-entry instrument table containing Yamaha ROM preset data. The normal
-//@ FM path uses MUL, TL, FB and the operator envelope rates/levels; other
-//@ parameters are decoded but are not all modeled yet. The DS-Lite fast path
-//@ uses a smaller subset.
+//@ 16-entry instrument table containing Yamaha ROM preset data. The FM path
+//@ uses MUL, TL, FB and the operator envelope rates/levels; other parameters
+//@ are decoded but are not all modeled yet.
 //@----------------------------------------------------------------------------
 YM_Instrument YM_InstrumentROM[16] __attribute__((section(".dtcm"))) =
 {
@@ -150,6 +144,7 @@ typedef struct
 
 static YM_FMParams YM_FM[YM_NUM_CHANNELS] __attribute__((section(".dtcm")));
 
+// This should be roughly 0.75dB per step... approx.
 static u8 YM_TLAtten[64] __attribute__((section(".dtcm"))) = {
     255,234,215,197,181,166,152,139,128,117,108,99,90,83,76,70,
     64,59,54,49,45,42,38,35,32,29,27,25,23,21,19,18,
@@ -207,13 +202,9 @@ static void YM_UpdateCustomUsers(YM *chip)
 }
 
 //@----------------------------------------------------------------------------
-//@ Legacy single-oscillator gain/envelope helper used by the fast mixer and rhythm voices.
+//@ Gain/envelope helper used by rhythm voices.
 //@----------------------------------------------------------------------------
-//@ The legacy fast-mixer/rhythm path uses a quick gain ramp on key-on and a
-//@ fractional release accumulator. The normal/DSi FM path uses separate
-//@ modulator and carrier envelope state machines instead.
-//@----------------------------------------------------------------------------
-static inline void YM_UpdateGain2(YM_Oscillator *osc, u8 keyOn, u32 releaseStep)
+static inline void YM_UpdateGain(YM_Oscillator *osc, u8 keyOn, u32 releaseStep)
 {
     if (keyOn)
     {
@@ -413,7 +404,7 @@ void YMWrite(u8 value, u8 address, YM *chip)
             if (newKey && !c->keyOn)
             {
                 c->osc.previousKeyOn = 0;   /* make the mixer see a fresh key-on edge */
-                c->osc.gain = 0;            /* fast mixer: restart its gain ramp      */
+                c->osc.gain = 0;            /* clear stale activity before key-on     */
             }
             c->keyOn = newKey;
         }
@@ -436,13 +427,12 @@ void YMWrite(u8 value, u8 address, YM *chip)
 }
 
 // =====================================================================================
-// Simplified melodic 2-operator FM path used by the normal/DSi mixer.
+// Simplified melodic 2-operator FM synthesis.
 //
 // This integer-only approximation is not a cycle-accurate YM2413 core. It models
 // two operators, simplified envelopes, MUL, TL and feedback. Block/KSR influence
 // the approximate envelope-rate calculation; KSL, AM, VIB and EG-TYP are decoded
-// but not currently applied. Rhythm synthesis and the DS-Lite fast mixer remain
-// separate paths.
+// but not currently applied. Rhythm synthesis is handled separately.
 // =====================================================================================
 
 enum
@@ -485,10 +475,12 @@ static inline void YM_PrecomputeFMRates(YM *chip, int ch)
     YM_FMParams *p = &YM_FM[ch];
     p->arMod = YM_FMRateStepPrecompute(inst->arMod, block, inst->ksrMod);
     p->drMod = YM_FMRateStepPrecompute(inst->drMod, block, inst->ksrMod);
-    p->rrMod = YM_FMRateStepPrecompute(inst->rrMod, block, inst->ksrMod);
+     /* Release is currently advanced once per output sample. Halve the
+         attenuation step so fast preset release rates leave a longer tail. */
+    p->rrMod = (YM_FMRateStepPrecompute(inst->rrMod, block, inst->ksrMod) + 1) >> 1;
     p->arCar = YM_FMRateStepPrecompute(inst->arCar, block, inst->ksrCar);
     p->drCar = YM_FMRateStepPrecompute(inst->drCar, block, inst->ksrCar);
-    p->rrCar = YM_FMRateStepPrecompute(inst->rrCar, block, inst->ksrCar);
+    p->rrCar = (YM_FMRateStepPrecompute(inst->rrCar, block, inst->ksrCar) + 1) >> 1;
     /* YM2413 TL is 0.75 dB per step, not a linear 4/step attenuation.
        Precompute the corresponding linear amplitude factor.  This is
        particularly important for patches with a heavily attenuated
@@ -653,7 +645,7 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
         return 0;
     }
 
-    /* While a released voice is still audible, keep the legacy active flag
+    /* While a released voice is still audible, keep the active flag
        asserted.  It is deliberately not used for amplitude here. */
     osc->gain = 255;
 
@@ -686,9 +678,8 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     carrier = (carrier * (255 - osc->carEnv)) >> 7;
     carrier = (carrier * p->volume) >> 7;
 
-    // Match the baseline YMMixer amplitude.  The carrier is already scaled
-    // by (15-volume) above; Play with this multiplier to adjust overall volume.
-    return carrier * 12;
+    // Apply the configured YM output level after channel-volume attenuation.
+    return carrier << myConfig.ymScale;
 }
 
 // -------------------------------------------------------------------------
@@ -736,7 +727,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
             /* Bass Drum */
             if (bd->osc.gain != 0)
             {
-                YM_UpdateGain2(
+                YM_UpdateGain(
                     &bd->osc,
                     0,
                     YM_PERCUSSION_RELEASE_STEP
@@ -761,7 +752,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
             /* Tom-Tom */
             if (tt->osc.gain != 0)
             {
-                YM_UpdateGain2(
+                YM_UpdateGain(
                     &tt->osc,
                     0,
                     YM_PERCUSSION_RELEASE_STEP
@@ -817,7 +808,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 /* Hi-Hat */
                 if (hs->osc.gain != 0)
                 {
-                    YM_UpdateGain2(
+                    YM_UpdateGain(
                         &hs->osc,
                         0,
                         YM_PERCUSSION_RELEASE_STEP
@@ -845,7 +836,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 /* Snare Drum: preserve existing tuning */
                 if (chip->rhythmSD.gain != 0)
                 {
-                    YM_UpdateGain2(
+                    YM_UpdateGain(
                         &chip->rhythmSD,
                         0,
                         2000
@@ -873,7 +864,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 /* Top Cymbal */
                 if (chip->rhythmTCY.gain != 0)
                 {
-                    YM_UpdateGain2(
+                    YM_UpdateGain(
                         &chip->rhythmTCY,
                         0,
                         YM_PERCUSSION_RELEASE_STEP

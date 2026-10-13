@@ -1076,7 +1076,7 @@ ITCM_CODE void cpu_writeport_msx(register u8 Port,register unsigned char Value)
             if (myConfig.expansion == MUSIC_MSX) 
             {
                 msx_music_capable_game = 1;
-                bFirstSoundOutput = 1;
+                bClickRemoveNeeded = 1;
             }
         }
 
