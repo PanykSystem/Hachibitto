@@ -390,12 +390,15 @@ mm_word ClickRemoval(mm_word len, mm_addr dest)
     s16 *p = (s16*)dest;
     for (int i=0; i<len; i++)
     {
-        if (last_sample < (target-256)) last_sample += 256;
-        if (last_sample > (target+256)) last_sample -= 256;
+        if (last_sample < (target-32)) last_sample += 8;
+        if (last_sample > (target+32)) last_sample -= 8;
         *p++ = last_sample;
     }
     
-    bClickRemoveNeeded = 0;
+    if (--bClickRemoveNeeded == 0)
+    {
+        mixer_read = mixer_write = 0;
+    }
     
     return len;   
 }
@@ -413,7 +416,6 @@ ITCM_CODE mm_word OurSoundMixer(mm_word len, mm_addr dest, mm_stream_formats for
         {
            *p++ = last_sample;      // To prevent pops and clicks... just keep outputting the last sample
         }
-        bClickRemoveNeeded = 1;
     }
     else
     {
@@ -458,7 +460,6 @@ ITCM_CODE mm_word OurSoundMixer_Lite(mm_word len, mm_addr dest, mm_stream_format
         {
            *p++ = last_sample;      // To prevent pops and clicks... just keep outputting the last sample
         }
-        bClickRemoveNeeded = 1;
     }
     else
     {
@@ -577,6 +578,8 @@ void sound_chip_reset()
     s16 mixbuf[16];
 
     SoundPause();
+    
+    bClickRemoveNeeded = 255;        // When we re-enable... smooth it to avoid pops/clicks
 
     msx_scc_capable_game = 0;        // Until proven otherwise
     msx_music_capable_game = 0;      // Until proven otherwise
