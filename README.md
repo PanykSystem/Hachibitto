@@ -90,6 +90,7 @@ Known Issues :
 -----------------------
 * MSX-MUSIC is complicated and consumes quite a bit of the DS CPU horsepower. As such, the Yamaha YM2413 / OPLL implementation is vastly simplified. It only runs full-speed on the DSi or above with the 2X CPU. Do not judge MSX-MUSIC harshly based on this emulator's ability.
 * Manbow 2 requires one of the hacks that does not try to address the flash chip (look for the "60Hz Patch" as one that works).
+* Breaker has severe screen glitching due to simplified VRAM handling of the emulator.
 
 The Hachibitto HB-8 Fantasy Console :
 -----------------------
@@ -112,7 +113,7 @@ Version 1.4 - 12-Oct-2026 by wavemotion-dave
 * Quit Icon added to main menu screen.
 * Disk Handling improved - should hopefully fix the rare disk write corruption.
 * New Audio handler for DSi - improves sample rate and now in-game voices (Aleste 2, Madou Monogatari, etc) are heard!
-* MSX-MUSIC updates to improve accuracy across the board.
+* MSX-MUSIC updates to improve accuracy across the board. It's using a simplified 2 oscillator FM algorithm that works well but consumes enough CPU power that it's only really practical for DSi/XL/LL with the faster 2X CPU.
 * Updates to SCC driver to fix stray tones/noise in various SCC games. 
 * SCC Mixer rewritten for speed and for high notes: the old counter only advance one wave step per sample, which broke any note above roughly SCC clock / (32 * SCCMULT) once SCCMULT was raised to 128. The new design has no such limit.
 * SCC Frequency period is now F+1 ticks, as on the real chip.
