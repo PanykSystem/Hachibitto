@@ -33,7 +33,7 @@
 #define YM_SIN_SHIFT               24        // phase>>24 -> 8-bit (256 entry) table index
 #define YM_GAIN_RAMP_STEP          16        // Legacy fast-mixer/rhythm gain ramp toward full
                                              // level on key-on; the normal FM path has operator envelopes.
-#define YM_PERCUSSION_RELEASE_STEP 5500      // PERCUSSION release rate: higher = faster decay
+#define YM_PERCUSSION_RELEASE_STEP 6300      // PERCUSSION release rate: higher = faster decay
                                              // for more distinct drum hits.
 
 /* Legacy fast-mixer carrier sustain approximation: map OPLL SL to gain levels
@@ -172,14 +172,14 @@ static inline void YM_PrecomputeFMRates(YM *chip, int ch);
 
 static u32 YM_ComputePhaseIncrement(u16 fNumber, u8 block, u8 mulNibble)
 {
-    // Integer-only: inc = F * 2^block * mulX2 * (masterClock << 12) / (72 * sampleRate)
+    // Integer-only: inc = F * 2^block * mulX2 * (masterClock << 12) / (36 * sampleRate)
     // See the development notes for the derivation. This rearrangement avoids
     // floating point entirely; both operands are integers.
     unsigned long long num = (unsigned long long)fNumber * (unsigned long long)YM_MulTableX2[mulNibble & 0x0F];
     num <<= block;
     num *= (unsigned long long)YM_MASTER_CLOCK << 12;
     
-    unsigned long long inc = num / (72ULL * YM_SAMPLE_RATE);
+    unsigned long long inc = num / (36ULL * YM_SAMPLE_RATE);
     if (inc >= 0x40000000ULL) return 0;   // would alias: freeze the operator
     return (u32)inc;
 }
