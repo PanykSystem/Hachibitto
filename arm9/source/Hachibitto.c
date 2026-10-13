@@ -320,7 +320,7 @@ ITCM_CODE void ProcessDirectAudio(void)
         mix2[1] = mixbufSCC[scc_sample_idx++];
         bMix = 1;
     }
-    else if (myConfig.expansion == MUSIC_2XPSG) // If 2xPSG enabled, grab those samples...
+    else if (myConfig.expansion == EXP_2XPSG) // If 2xPSG enabled, grab those samples...
     {
         ay38910Mixer(SAMPLES_PER_DIRECT_CALL, mix2, &myAY2);
         mix2[0] += 32768;
@@ -329,7 +329,7 @@ ITCM_CODE void ProcessDirectAudio(void)
     }
     else if (beeperFreq) // If beeper is hit and enabled, mix it in...
     {
-        if (myConfig.expansion == MUSIC_BEEPER)
+        if (myConfig.expansion == EXP_BEEPER)
         {
             // This is mixed directly into mix1
             lastBeeper ^= 0x2000;   
@@ -374,6 +374,7 @@ mm_word ClickRemoval(mm_word len, mm_addr dest)
     ay38910Mixer(16, mix1, &myAY);  // Mix AY and give us something to move towards
     if (msx_music_capable_game)
     {
+        YMMixer(len-16, dest, &myYM); // Keep the YM stepping normally
         YMMixer(16, mix1, &myYM); // Mix directly on top of AY
     }
     else if (msx_scc_capable_game)
@@ -503,7 +504,7 @@ ITCM_CODE mm_word OurSoundMixer_Lite(mm_word len, mm_addr dest, mm_stream_format
         {
             ay38910Mixer(len, dest, &myAY);
 
-            if (myConfig.expansion == MUSIC_2XPSG) // 2x PSG enabled? If so... mix it in.
+            if (myConfig.expansion == EXP_2XPSG) // 2x PSG enabled? If so... mix it in.
             {
                 ay38910Mixer(len, mixer, &myAY2);
                 s16 *p = (s16*)dest;
@@ -516,7 +517,7 @@ ITCM_CODE mm_word OurSoundMixer_Lite(mm_word len, mm_addr dest, mm_stream_format
                 }
             }
             // Did the beeper get hit at any point? If so, we need to mix it in... but it's rare so we do it on an external function.
-            else if (beeperFreq && (myConfig.expansion == MUSIC_BEEPER))
+            else if (beeperFreq && (myConfig.expansion == EXP_BEEPER))
             {
                 ProcessBeeper(len, dest);
             }
@@ -579,7 +580,7 @@ void sound_chip_reset()
 
     SoundPause();
     
-    bClickRemoveNeeded = 255;        // When we re-enable... smooth it to avoid pops/clicks
+    bClickRemoveNeeded = 150;        // When we re-enable... smooth it to avoid pops/clicks
 
     msx_scc_capable_game = 0;        // Until proven otherwise
     msx_music_capable_game = 0;      // Until proven otherwise
@@ -805,7 +806,7 @@ void DisplayStatusLine(void)
             DSPrint(20, 0, 2, "$%&");
             DSPrint(20, 1, 2, "DEF");
         }
-        else if (myConfig.expansion == MUSIC_2XPSG)
+        else if (myConfig.expansion == EXP_2XPSG)
         {
             // 2X PSG
             DSPrint(20, 0, 2, "!\"#");

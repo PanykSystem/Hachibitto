@@ -101,11 +101,12 @@ struct __attribute__((__packed__)) Config_t
 #define MACHINE_MSX2                0x00    // Standard MSX2 slot layout (slot 3 expanded with RAM in slot 3-3)
 #define MACHINE_MSX1                0x01    // Standard MSX1 slot layout (nothing expanded, RAM in Slot 2)
 
-#define MUSIC_PSG                   0       // Normal AY
-#define MUSIC_MSX                   1       // MSX-MUSIC (YM)
-#define MUSIC_SCC                   2       // SCC / SCC+
-#define MUSIC_2XPSG                 3       // 2x PSG Mode
-#define MUSIC_BEEPER                4       // Beeper Active
+#define EXP_NONE                    0       // No special expansion
+#define EXP_FM_PAC                  1       // MSX-MUSIC (YM)
+#define EXP_SCC_PLUS                2       // SCC-I / SCC+
+#define EXP_2XPSG                   3       // 2x PSG Mode
+#define EXP_BEEPER                  4       // Beeper Active (yeah, not really an expansion but...)
+#define EXP_MEGARAM                 5       // MegaRAM SCC 512K
 
 #define FS_NONE                     0       // No Frame Skip
 #define FS_LIGHT                    1       // Light Frame Skip
@@ -173,8 +174,9 @@ extern u8 mirror_ram_bank[4];
 #define KOEISRAM32      73  // Not one of the general mappers a user can pick
 #define MANBOW2         74  // Not one of the general mappers a user can pick
 
-#define FMPAC_SRAM      87  // For our special FM-PAC Cart
-#define SCCPLUS_RAM     88  // For our special SCC+ "Cart"
+#define MEGA_SCC        86  // For our special MEGARAM SCC 'Cart'
+#define FMPAC_SRAM      87  // For our special FM-PAC 'Cart'
+#define SCCPLUS_RAM     88  // For our special SCC+ 'Cart'
 
 #define MAX_GUESS_MAPPER 8   // The highest guess we can guess when examining ROM data
 
@@ -192,7 +194,7 @@ extern const unsigned char MSXBios_DISK[0x4000];
 extern const unsigned char MSXBios_MSX2[0x8000];
 extern const unsigned char MSXBios_MSX2EXT[0x4000];
 extern const unsigned char MSXBios_MSX1[0x8000];
-extern const unsigned char MSXBios_MSXMUSIC[0x4000];
+extern const unsigned char MSXBios_FMPAC[0x4000];
 
 typedef struct
 {

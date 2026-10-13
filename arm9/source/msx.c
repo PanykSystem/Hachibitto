@@ -651,7 +651,7 @@ ITCM_CODE unsigned char cpu_readport_msx(register u8 Port)
   }
   else if (Port == 0x12)  // 2xPSG Read...
   {
-      if (myConfig.expansion == MUSIC_2XPSG) return ay38910DataR(&myAY2);
+      if (myConfig.expansion == EXP_2XPSG) return ay38910DataR(&myAY2);
       else return NORAM;
   }
   else if (Port == 0xA8)  // Feedback on Slot mapping
@@ -1057,10 +1057,23 @@ ITCM_CODE void cpu_writeport_msx(register u8 Port,register unsigned char Value)
             u8 page = Port-0xFC;
             u8 bank = Value & 0xF; // 256K is 16K in 16 banks
             
+            if (myConfig.expansion == EXP_MEGARAM) // If we have mapped in the MEGARAM 'cart'... expand to 512K
+            {
+                bank = Value & (isDSiMode() ? 0x3F : 0x1F); // 512K is 16K in 32 banks, for DSi 1MB is 16K in 64 banks
+            }
+            
             mirror_ram_bank[page] = bank; // For read-back
 
-            MSXRamPtr[(page*2)+0] = RAM_Memory + (0x4000 * bank);
-            MSXRamPtr[(page*2)+1] = RAM_Memory + (0x4000 * bank) + 0x2000;
+            if (bank >= 16) // Expanded banks for the MEGARAM 'cart' are stored in upper ROM memory
+            {
+                MSXRamPtr[(page*2)+0] = ROM_Memory + ((MAX_CART_SIZE_KB/2) * 1024) + (0x4000 * (bank-16));
+                MSXRamPtr[(page*2)+1] = ROM_Memory + ((MAX_CART_SIZE_KB/2) * 1024) + (0x4000 * (bank-16)) + 0x2000;
+            }
+            else
+            {
+                MSXRamPtr[(page*2)+0] = RAM_Memory + (0x4000 * bank);
+                MSXRamPtr[(page*2)+1] = RAM_Memory + (0x4000 * bank) + 0x2000;
+            }
 
             cpu_writeport_msx(0xA8, Port_PPI_A); // Enable the new map...
         }
@@ -1073,7 +1086,7 @@ ITCM_CODE void cpu_writeport_msx(register u8 Port,register unsigned char Value)
     {
         if (++msx_music_writes == 10) // Arbitrary... if we hit it at least 10 times, we turn on MSX MUSIC output
         {
-            if (myConfig.expansion == MUSIC_MSX) 
+            if (myConfig.expansion == EXP_FM_PAC) 
             {
                 msx_music_capable_game = 1;
                 bClickRemoveNeeded = 1;
@@ -1679,7 +1692,7 @@ void MSX_InitialMemoryLayout(void)
     // -----------------------------------------------------------------
     // SCC music and FM-PAC are "carts" mapped into Slot 2 (Cart 2)...
     // -----------------------------------------------------------------
-    if (myConfig.expansion == MUSIC_SCC) // SCC PLUS enabled?
+    if (myConfig.expansion == EXP_SCC_PLUS) // SCC PLUS enabled?
     {
         // ---------------------------------------------------------------
         // This cart supplies its own private 64K of RAM (not ROM_Memory).
@@ -1708,7 +1721,7 @@ void MSX_InitialMemoryLayout(void)
         MSXCartPtr[MEDIA_CART2][6] = (u8*)Unmapped_Memory;          // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][7] = (u8*)Unmapped_Memory;          // Segment Unmapped
     }
-    if (myConfig.expansion == MUSIC_MSX) // MSX-MUSIC enabled? Enabled FM-PAC SRAM handling...
+    if (myConfig.expansion == EXP_FM_PAC) // MSX-MUSIC enabled? Enabled FM-PAC SRAM handling...
     {
         MyMedia[MEDIA_CART2].mapperMask = 0;
         MyMedia[MEDIA_CART2].blockSize = 0x2000;
@@ -1716,8 +1729,8 @@ void MSX_InitialMemoryLayout(void)
 
         MSXCartPtr[MEDIA_CART2][0] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][1] = (u8*)Unmapped_Memory;           // Segment Unmapped
-        MSXCartPtr[MEDIA_CART2][2] = (u8*)MSXBios_MSXMUSIC + 0x0000; // 4000-5FFF -> MSX-MUSIC / FM-PAC BIOS
-        MSXCartPtr[MEDIA_CART2][3] = (u8*)MSXBios_MSXMUSIC + 0x2000; // 6000-7FFF -> MSX-MUSIC / FM-PAC BIOS
+        MSXCartPtr[MEDIA_CART2][2] = (u8*)MSXBios_FMPAC + 0x0000; // 4000-5FFF -> MSX-MUSIC / FM-PAC BIOS
+        MSXCartPtr[MEDIA_CART2][3] = (u8*)MSXBios_FMPAC + 0x2000; // 6000-7FFF -> MSX-MUSIC / FM-PAC BIOS
         MSXCartPtr[MEDIA_CART2][4] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][5] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][6] = (u8*)Unmapped_Memory;           // Segment Unmapped
@@ -1725,7 +1738,21 @@ void MSX_InitialMemoryLayout(void)
         
         msxLoadSRAM();  // FM-PAC with MSX-MUSIC also has 8K of SRAM
     }
+    if (myConfig.expansion == EXP_MEGARAM) // MEGARAM has both system RAM and SCC capable mapping
+    {
+        MyMedia[MEDIA_CART2].mapperMask = 0;
+        MyMedia[MEDIA_CART2].blockSize = 0x2000;
+        MyMedia[MEDIA_CART2].mapperType = MEGA_SCC;
 
+        MSXCartPtr[MEDIA_CART2][0] = (u8*)Unmapped_Memory;           // Segment Unmapped
+        MSXCartPtr[MEDIA_CART2][1] = (u8*)Unmapped_Memory;           // Segment Unmapped
+        MSXCartPtr[MEDIA_CART2][2] = (u8*)Unmapped_Memory;           // Segment Unmapped
+        MSXCartPtr[MEDIA_CART2][3] = (u8*)Unmapped_Memory;           // Segment Unmapped
+        MSXCartPtr[MEDIA_CART2][4] = (u8*)Unmapped_Memory;           // Segment Unmapped
+        MSXCartPtr[MEDIA_CART2][5] = (u8*)Unmapped_Memory;           // Segment Unmapped
+        MSXCartPtr[MEDIA_CART2][6] = (u8*)Unmapped_Memory;           // Segment Unmapped
+        MSXCartPtr[MEDIA_CART2][7] = (u8*)Unmapped_Memory;           // Segment Unmapped
+    }
     if (MyMedia[MEDIA_CART1].filecrc) // For ROMs we need a mapper type... User might have pre-selected one or we need to guess.
     {
         if (myConfig.msxMapper == GUESS)
@@ -1747,7 +1774,7 @@ void MSX_InitialMemoryLayout(void)
 
     // For Slot 2 we only look-up by ROM DB... there is no override.
     // We don't allow any CART2 if we have the SCC-I cart or the FM-PAC (MSX-MUSIC) cart enabled...
-    if (MyMedia[MEDIA_CART2].filecrc && (myConfig.expansion != MUSIC_SCC) && (myConfig.expansion != MUSIC_MSX))
+    if (MyMedia[MEDIA_CART2].filecrc && (myConfig.expansion != EXP_SCC_PLUS) && (myConfig.expansion != EXP_FM_PAC) && (myConfig.expansion != EXP_MEGARAM))
     {
         MyMedia[MEDIA_CART2].mapperType = RomDB_Lookup(MEDIA_CART2);
         MSX_CartSetup(MEDIA_CART2);

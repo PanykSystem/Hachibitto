@@ -45,7 +45,7 @@ struct RomOffset Offsets[8];
 #define TYPE_FDC        2
 #define TYPE_BIOS       3
 #define TYPE_EBIOS      4
-#define TYPE_MSXMUSIC   5
+#define TYPE_FMPAC      5
 #define TYPE_SRAM       6
 #define TYPE_OTHER      9
 
@@ -144,10 +144,10 @@ void msxSaveState(void)
                 Offsets[i].type = TYPE_EBIOS;
                 Offsets[i].offset = shifted_offset - MSXBios_MSX2EXT;
             }
-            else if ((shifted_offset >= MSXBios_MSXMUSIC) && (shifted_offset < MSXBios_MSXMUSIC+(sizeof(MSXBios_MSXMUSIC))))
+            else if ((shifted_offset >= MSXBios_FMPAC) && (shifted_offset < MSXBios_FMPAC+(sizeof(MSXBios_FMPAC))))
             {
-                Offsets[i].type = TYPE_MSXMUSIC;
-                Offsets[i].offset = shifted_offset - MSXBios_MSXMUSIC;
+                Offsets[i].type = TYPE_FMPAC;
+                Offsets[i].offset = shifted_offset - MSXBios_FMPAC;
             }
             else
             {
@@ -303,7 +303,6 @@ void msxSaveState(void)
         // --------------------------------------------------------------------------------------------
         int max_len = lzav_compress_bound_hi( 0x20000 );
         int comp_len = lzav_compress_hi( RAM_Memory, COMPRESS_BUFFER, 0x20000, max_len );
-
         if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
         if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
 
@@ -311,16 +310,28 @@ void msxSaveState(void)
         // Compress the 256K RAM data using 'high' compression ratio... We do this in two 128K chunks.
         // --------------------------------------------------------------------------------------------
         comp_len = lzav_compress_hi( RAM_Memory+0x20000, COMPRESS_BUFFER, 0x20000, max_len );
-
         if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
         if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
+
+        // ------------------------------------------------------------------------------------
+        // If we are MEGARAM, we have a pile of RAM sitting in ROM_Memory[] that needs backing.
+        // ------------------------------------------------------------------------------------
+        if (myConfig.expansion == EXP_MEGARAM)
+        {
+            // Do this in 128K chunks... DSi has 1MB, DS-Lite has 512K
+            for (int i=0; i < (isDSiMode() ? 8:4); i++)
+            {
+                comp_len = lzav_compress_hi( ROM_Memory+((MAX_CART_SIZE_KB/2)*1024)+(i*0x20000), COMPRESS_BUFFER, 0x20000, max_len );
+                if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
+                if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
+            }
+        }
 
         // -----------------------------------------------------------------------
         // Compress the 128K VRAM data using 'high' compression ratio...
         // -----------------------------------------------------------------------
         max_len = lzav_compress_bound_hi( sizeof(VDP_Memory) );
         comp_len = lzav_compress_hi( VDP_Memory, COMPRESS_BUFFER, sizeof(VDP_Memory), max_len );
-
         if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
         if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
 
@@ -407,9 +418,9 @@ void msxLoadState(void)
                 {
                     MemoryMap[i] = (u8 *) (MSXBios_MSX2EXT + Offsets[i].offset) - (0x2000 * i);
                 }
-                else if (Offsets[i].type == TYPE_MSXMUSIC)
+                else if (Offsets[i].type == TYPE_FMPAC)
                 {
-                    MemoryMap[i] = (u8 *) (MSXBios_MSXMUSIC + Offsets[i].offset) - (0x2000 * i);
+                    MemoryMap[i] = (u8 *) (MSXBios_FMPAC + Offsets[i].offset) - (0x2000 * i);
                 }
                 else // TYPE_OTHER - this is just a pointer to memory
                 {
@@ -557,6 +568,20 @@ void msxLoadState(void)
             if (retVal) retVal = fread(&comp_len,               sizeof(comp_len), 1, handle);
             if (retVal) retVal = fread(COMPRESS_BUFFER,         comp_len,         1, handle);
             (void)lzav_decompress( COMPRESS_BUFFER, RAM_Memory+0x20000, comp_len, 0x20000);
+
+            // --------------------------------------------------------------------------------------
+            // If we are MEGARAM, we have a pile of RAM sitting in ROM_Memory[] that needs restoring.
+            // --------------------------------------------------------------------------------------
+            if (myConfig.expansion == EXP_MEGARAM)
+            {
+                // Do this in 128K chunks... DSi has 1MB, DS-Lite has 512K
+                for (int i=0; i < (isDSiMode() ? 8:4); i++)
+                {
+                    if (retVal) retVal = fread(&comp_len,               sizeof(comp_len), 1, handle);
+                    if (retVal) retVal = fread(COMPRESS_BUFFER,         comp_len,         1, handle);
+                    (void)lzav_decompress( COMPRESS_BUFFER, ROM_Memory+((MAX_CART_SIZE_KB*2)*1024)+(i*0x20000), comp_len, 0x20000);
+                }
+            }
 
             // -----------------------------------------------------------------------
             // Restore VDP RAM memory which was saved in a compressed format

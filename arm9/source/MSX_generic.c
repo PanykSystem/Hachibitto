@@ -882,55 +882,55 @@ static const GameTweak gameTweaks[] =
     { "ADVENTURES",      "PARK",              TWEAK_NONE,      TWEAK_NONE,  0,           TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
                                                                                                                                         
     // SCC+                                                                                                                             
-    { "SNATCHER",        NULL,                MUSIC_SCC,    FS_AGGRESSIVE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "SNATCHER",        NULL,              EXP_SCC_PLUS,   FS_AGGRESSIVE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
                                                                                                                                         
     // Aggressive frame skip on DS-Lite                                                                                                 
     { "MANBOW",          NULL,                TWEAK_NONE,   FS_AGGRESSIVE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
                                                                                                                                         
     // MSX-MUSIC - works on DS-Lite                                                                                                     
-    { "LUBECK",          NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "XAK",             NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_LOW  },
-    { "FAMICLE",         NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "FRAY",            NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "SINGULAR",        "STONE",             MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "LUBECK",          NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "XAK",             NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_LOW  },
+    { "FAMICLE",         NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "FRAY",            NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "SINGULAR",        "STONE",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
                                                                                                                                         
     // MSX-MUSIC + aggressive frame skip on DS-Lite                                                                                     
-    { "LILLY",           "SAGA",              MUSIC_MSX,    FS_AGGRESSIVE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "LILLY",           "SAGA",              EXP_FM_PAC,   FS_AGGRESSIVE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
                                                                                                                                         
     // MSX-MUSIC - DSi only                                                                                                             
-    { "ALESTE",          NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "MONOGATARI",      NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "SLAYER",          "VI",                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "GOLVELLIUS 2",    NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "GOLVELLIUS II",   NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "ILLUSION",        "CITY",              MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "SUPER",           "COOKS",             MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "PSYCH",           "WORLD",             MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "MAD",             "HOUSE",             MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "DEAD",            "BRAIN",             MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "EUROPE",          "WAR",               MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "FAMILY",          "STADIUM",           MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "FLEET",           "COMMANDER 2",       MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "GAMBLER",         "JIKICHUSHINPA",     MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "MAISON",          "IKKOKU",            MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "EMERALD",         "DRAGON",            MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "PENGUIN",         "WARS",              MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "BLASTER",         "BURN",              MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "LAYDOCK",         "LAST",              MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "THEXDER",         "HAWK",              MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "BLADE",           "LORDS",             MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_MED  },
-    { "BUSHOUHUUNROKU",  NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "SENKOKUGUNYUDEN", NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "FARDRAUT",        NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "SUIKODEN",        NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "PAC-MANIA",       NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "GENCHOHISI",      NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "QUINPL",          NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "UNDEADLINE",      NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "CRIMSON",         NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_MED  },
-    { "FEEDBACK",        NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "MASTER 3",        NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "MASTER III",      NULL,                MUSIC_MSX,       TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "ALESTE",          NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "MONOGATARI",      NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "SLAYER",          "VI",                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "GOLVELLIUS 2",    NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "GOLVELLIUS II",   NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "ILLUSION",        "CITY",              EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "SUPER",           "COOKS",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "PSYCH",           "WORLD",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "MAD",             "HOUSE",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "DEAD",            "BRAIN",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "EUROPE",          "WAR",               EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "FAMILY",          "STADIUM",           EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "FLEET",           "COMMANDER 2",       EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "GAMBLER",         "JIKICHUSHINPA",     EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "MAISON",          "IKKOKU",            EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "EMERALD",         "DRAGON",            EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "PENGUIN",         "WARS",              EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "BLASTER",         "BURN",              EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "LAYDOCK",         "LAST",              EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "THEXDER",         "HAWK",              EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "BLADE",           "LORDS",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_MED  },
+    { "BUSHOUHUUNROKU",  NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "SENKOKUGUNYUDEN", NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "FARDRAUT",        NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "SUIKODEN",        NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "PAC-MANIA",       NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "GENCHOHISI",      NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "QUINPL",          NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "UNDEADLINE",      NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "CRIMSON",         NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_MED  },
+    { "FEEDBACK",        NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "MASTER 3",        NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "MASTER III",      NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
                                                                                                                                         
     // D-Pad                                                                                                                            
     { "ARKANOID",        NULL,                TWEAK_NONE,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    DPAD_ARKANOID,      TWEAK_NONE  },
@@ -942,12 +942,12 @@ static const GameTweak gameTweaks[] =
     { "KING",            "BALLOON",           TWEAK_NONE,      TWEAK_NONE,  TWEAK_NONE,  MACHINE_MSX1,  TWEAK_NONE,         TWEAK_NONE  },
                                                                                                                                         
     // Beeper                                                                                                                           
-    { "WAY",             "TIGER",             MUSIC_BEEPER,    TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "JACK",            "NIPPER",            MUSIC_BEEPER,    TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "MASTER",          "LAMPS",             MUSIC_BEEPER,    TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "FUTURE",          "KNIGHT",            MUSIC_BEEPER,    TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "AVENGER",         NULL,                MUSIC_BEEPER,    TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "BOUNDER",         NULL,                MUSIC_BEEPER,    TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "WAY",             "TIGER",             EXP_BEEPER,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "JACK",            "NIPPER",            EXP_BEEPER,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "MASTER",          "LAMPS",             EXP_BEEPER,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "FUTURE",          "KNIGHT",            EXP_BEEPER,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "AVENGER",         NULL,                EXP_BEEPER,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "BOUNDER",         NULL,                EXP_BEEPER,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
 };
 
 
@@ -967,7 +967,7 @@ void ApplyDatabaseTweaks(void)
 
         if (t->expansion != TWEAK_NONE)
         {
-            if ((t->expansion == MUSIC_MSX) && !isDSiMode())
+            if ((t->expansion == EXP_FM_PAC) && !isDSiMode())
             {
                 // No MSX-MUSIC for the DSi... not enough CPU
             }
@@ -1067,7 +1067,7 @@ void SetDefaultGameConfig(void)
     myConfig.maxSprites   = 1;                           // 0 means limit to the original 4/8 sprites of the VDP, 1 means 32 sprites for emulation
     myConfig.dpad         = DPAD_NORMAL;                 // Normal DPAD use - mapped to joystick
     myConfig.yOffset      = 0;                           // Default is no Y offset
-    myConfig.expansion    = MUSIC_PSG;                   // Default is no expansion (normal PSG sound)
+    myConfig.expansion    = EXP_NONE;                    // Default is no expansion (normal PSG sound, no special mapper cards in slot 2)
     myConfig.cpuBoost     = 0;                           // Run CPU at true speed (1=boost 10%)
     myConfig.splitRefresh = 2;                           // 0=Strict, 1=Refresh a line, 2= Refresh two lines
     myConfig.scaleScreen  = 0;                           // 0=No Screen Scale. 1=Vertical Compression (yuck!)
@@ -1191,7 +1191,7 @@ const struct options_t Option_Table[2][20] =
         {"JOYSTICK",       {"NORMAL", "DIAGONALS", "ARKANOID", "SLIDE-N-GLILDE"},                                                                                               &myConfig.dpad,             4},
         {"SPLIT TIMING",   {"0 LINES", "1 LINE", "2 LINES"},                                                                                                                    &myConfig.splitRefresh,     3},
         {"CPU SPEED",      {"NORMAL", "BOOSTED 10%", "BOOSTED 20%"},                                                                                                            &myConfig.cpuBoost,         3},
-        {"EXPANSION",      {"NONE", "FM-PAC", "SCC+ (SCC-I)", "2x PSG", "BEEPER"},                                                                                              &myConfig.expansion,        5},
+        {"EXPANSION",      {"NONE", "FM-PAC", "SCC+ (SCC-I)", "2x PSG", "BEEPER", "MEGARAM SCC"},                                                                               &myConfig.expansion,        6},
         {"Y OFFSET",       {"None", "+1", "+2", "+3", "+4", "+5", "+6", "+7", "+8", "+9", "+10", "+11", "+12", "+13", "+14", "+15", "+16", "+17", "+18", "+19", "+20"},         &myConfig.yOffset,          21},
         {"SCREEN SCALE",   {"NONE", "COMPRESSED"},                                                                                                                              &myConfig.scaleScreen,      2},
         {"BORDER MASK",    {"NONE", "LEFT", "RIGHT", "LEFT + RIGHT"},                                                                                                           &myConfig.maskBorders,      4},
@@ -1526,6 +1526,14 @@ void DisplayFileNames(void)
                 DSPrint(6, 4+(5*id)+0,2, "-./0123");
                 DSPrint(6, 5+(5*id)+0,2, "MNOPQRS");
             }
+            else if (strcmp(MyMedia[id].filename, "MEGARAM SCC") == 0)
+            {
+                DSPrint(5, 4+(5*id)+0,4, "!\"#$%&'()*+,-./012345");
+                DSPrint(5, 5+(5*id)+0,4, "ABCDEFGHIJKLMNOPQRS");
+
+                DSPrint(25, 4+(5*id)+0,2, "-./01");
+                DSPrint(25, 5+(5*id)+0,2, "MNOPQ");
+            }
         }
         else
         {
@@ -1620,18 +1628,25 @@ void NoGameSelected(void)
 
 void CheckIfGameHasMusicMapper(void)
 {
-    if (myConfig.expansion == MUSIC_SCC)
+    if (myConfig.expansion == EXP_SCC_PLUS)
     {
         // If the new Config tells us this is an SCC+ game, that slides into CART2
         memset(&MyMedia[MEDIA_CART2], 0x00, sizeof(MyMedia[MEDIA_CART2]));
         strcpy(MyMedia[MEDIA_CART2].filename, "SCC-I");
         MyMedia[MEDIA_CART2].filecrc = 0xFFFFFFFF;
     }
-    else if (myConfig.expansion == MUSIC_MSX)
+    else if (myConfig.expansion == EXP_FM_PAC)
     {
-        // If the new Config tells us this is an MSX-MUSIC game, that slides into CART2
+        // If the new Config tells us this is an FM-PAC cart, that slides into CART2
         memset(&MyMedia[MEDIA_CART2], 0x00, sizeof(MyMedia[MEDIA_CART2]));
         strcpy(MyMedia[MEDIA_CART2].filename, "FM-PAC");
+        MyMedia[MEDIA_CART2].filecrc = 0xFFFFFFFF;
+    }
+    else if (myConfig.expansion == EXP_MEGARAM)
+    {
+        // If the new Config tells us this is an MEGARAM SCC cart, that slides into CART2
+        memset(&MyMedia[MEDIA_CART2], 0x00, sizeof(MyMedia[MEDIA_CART2]));
+        strcpy(MyMedia[MEDIA_CART2].filename, "MEGARAM SCC");
         MyMedia[MEDIA_CART2].filecrc = 0xFFFFFFFF;
     }
     else if (MyMedia[MEDIA_CART2].filecrc == 0xFFFFFFFF) // Was music mapped in?
@@ -1714,7 +1729,7 @@ void HachibittoMainMenu(void)
             }
             else if ((touch.py >= 60) && (touch.py < 98)) // CART 2
             {
-                if ((myConfig.expansion != MUSIC_SCC) && (myConfig.expansion != MUSIC_MSX)) // Expanded Music mapper has to be booted out by Options...
+                if ((myConfig.expansion != EXP_SCC_PLUS) && (myConfig.expansion != EXP_FM_PAC)) // Expanded Music mapper has to be booted out by Options...
                 {
                     if ((touch.px >= 220) && MyMedia[MEDIA_CART2].filecrc) // Delete existing mount?
                     {
@@ -1844,7 +1859,7 @@ void DSPrint(int iX,int iY,int iScr,char *szMessage)
   char *pTrTxt=szMessage;
 
   pusScreen=(u16*) (iScr != 1 ? bgGetMapPtr(bg1b) : bgGetMapPtr(bg1))+iX+(iY<<5);
-  pusMap=(u16*) (iScr != 1 ? (iScr == 6 ? bgGetMapPtr(bg0b)+24*32 : (iScr == 0 ? bgGetMapPtr(bg0b)+24*32 : bgGetMapPtr(bg0b)+26*32 )) : bgGetMapPtr(bg0)+51*32 );
+  pusMap=(u16*) (iScr != 1 ? (iScr == 6 ? bgGetMapPtr(bg0b)+24*32 : (iScr == 0 ? bgGetMapPtr(bg0b)+24*32 : (iScr == 4) ? bgGetMapPtr(bg0b)+28*32 : bgGetMapPtr(bg0b)+26*32 )) : bgGetMapPtr(bg0)+51*32 );
 
   while((*pTrTxt)!='\0' )
   {
