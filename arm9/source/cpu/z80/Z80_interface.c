@@ -665,7 +665,7 @@ void HandleKonamiSCC8(u32* src, u8 block, u16 address, u8 value)
 // This is a memory-mapper expansion (handled in msx.c) to bring total system memory
 // up to 512K (DS-Lite) or 1MB (DSi/XL/LL) but also contains a standard SCC cart.
 // -----------------------------------------------------------------------------------
-void HandleMegaSCC(u16 address, u8 value)
+void __attribute__((noinline)) HandleMegaSCC(u16 address, u8 value)
 {
     // -----------------------------------------------------------------------------------
     // Are we writing to the SCC chip memory mapped area and are the registers "in view"?
@@ -702,47 +702,57 @@ void HandleMegaSCC(u16 address, u8 value)
 // Very much like Konami SCC but without mirrors and with flash write possibilities...
 // TODO: Handle AMD flash write commands. Until then, only patched/hacked Manbow 2 runs.
 // --------------------------------------------------------------------------------------
-void HandleManbow2(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleManbow2(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
-    if ((address & 0xF800) == 0x5000)
+    // -----------------------------------------------------------------------------------
+    // Are we writing to the SCC chip memory mapped area and are the registers "in view"?
+    // -----------------------------------------------------------------------------------
+    if ((special_memory_access & SPEC_MEM_SCC_ENABLED) && ((address & 0xF800) == 0x9800))
     {
-        MSXCartPtr[media_id][2] = (u8*)src;  // Main ROM
-        MemoryMap[2] = (u8 *)(MSXCartPtr[media_id][2]) - 0x4000;
+         SCC_LegacyWrite(value, address&0xFF);
     }
-    else if ((address & 0xF800) == 0x7000)
+    else // We only handle bank switching if the SCC registers were not accessed above...
     {
-        MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
-        MemoryMap[3] = (u8 *)(MSXCartPtr[media_id][3]) - 0x6000;
-    }
-    else if ((address & 0xF800) == 0x9000)
-    {
-        // --------------------------------------------------------------------------------------------------
-        // For standard SCC carts we require the full 0x3F to be programmed to enable the SCC register view.
-        // And yes, the banking logic below is still always called...
-        // --------------------------------------------------------------------------------------------------
-        if ((value & 0x3F) == 0x3F)
+        if ((address & 0xF800) == 0x5000)
         {
-            special_memory_access |= SPEC_MEM_SCC_ENABLED;  // SCC Registers are now "in view"
-            if (!msx_scc_capable_game)
+            MSXCartPtr[media_id][2] = (u8*)src;  // Main ROM
+            MemoryMap[2] = (u8 *)(MSXCartPtr[media_id][2]) - 0x4000;
+        }
+        else if ((address & 0xF800) == 0x7000)
+        {
+            MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
+            MemoryMap[3] = (u8 *)(MSXCartPtr[media_id][3]) - 0x6000;
+        }
+        else if ((address & 0xF800) == 0x9000)
+        {
+            // --------------------------------------------------------------------------------------------------
+            // For standard SCC carts we require the full 0x3F to be programmed to enable the SCC register view.
+            // And yes, the banking logic below is still always called...
+            // --------------------------------------------------------------------------------------------------
+            if ((value & 0x3F) == 0x3F)
             {
-                msx_scc_capable_game = true;                 // SCC sound - set a flag so we process this special sound chip for this game
-                bClickRemoveNeeded = 1;
+                special_memory_access |= SPEC_MEM_SCC_ENABLED;  // SCC Registers are now "in view"
+                if (!msx_scc_capable_game)
+                {
+                    msx_scc_capable_game = true;                 // SCC sound - set a flag so we process this special sound chip for this game
+                    bClickRemoveNeeded = 1;
+                }
             }
-        }
-        else
-        {
-            special_memory_access &= ~SPEC_MEM_SCC_ENABLED; // SCC Registers are no longer "in view"
-        }
+            else
+            {
+                special_memory_access &= ~SPEC_MEM_SCC_ENABLED; // SCC Registers are no longer "in view"
+            }
 
-        MSXCartPtr[media_id][4] = (u8*)src;  // Main ROM
-        MemoryMap[4] = (u8 *)(MSXCartPtr[media_id][4]) - 0x8000;
-    }
-    else if ((address & 0xF800) == 0xB000)
-    {
-        MSXCartPtr[media_id][5] = (u8*)src;  // Main ROM
-        MemoryMap[5] = (u8 *)(MSXCartPtr[media_id][5]) - 0xA000;
+            MSXCartPtr[media_id][4] = (u8*)src;  // Main ROM
+            MemoryMap[4] = (u8 *)(MSXCartPtr[media_id][4]) - 0x8000;
+        }
+        else if ((address & 0xF800) == 0xB000)
+        {
+            MSXCartPtr[media_id][5] = (u8*)src;  // Main ROM
+            MemoryMap[5] = (u8 *)(MSXCartPtr[media_id][5]) - 0xA000;
+        }
     }
 }
 
@@ -751,7 +761,7 @@ void HandleManbow2(u32* src, u8 block, u16 address, u8 value)
 // ---------------------------------------------------------------------
 // Xevious and a few other related games have special cart mapping...
 // ---------------------------------------------------------------------
-void HandleXevious(u32* src, u8 block, u16 address)
+void __attribute__((noinline))  HandleXevious(u32* src, u8 block, u16 address)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -778,7 +788,7 @@ void HandleXevious(u32* src, u8 block, u16 address)
 // ---------------------------------------------------------------------------------------------
 // Same as Konami8 but with DAC at 0x4000 range. We don't handle that yet, but game is playable.
 // ---------------------------------------------------------------------------------------------
-void HandleMajut(u32* src, u8 block, u16 address)
+void __attribute__((noinline))  HandleMajut(u32* src, u8 block, u16 address)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -805,7 +815,7 @@ void HandleMajut(u32* src, u8 block, u16 address)
 // ---------------------------------------------------------------------
 // XBlam switches on hits to addres 0x4045 and swaps out 16K at 0x8000
 // ---------------------------------------------------------------------
-void HandleXBlam(u32* src, u8 block, u16 address)
+void __attribute__((noinline))  HandleXBlam(u32* src, u8 block, u16 address)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -821,7 +831,7 @@ void HandleXBlam(u32* src, u8 block, u16 address)
     }
 }
 
-void HandleGeneric8k(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleGeneric8k(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -889,7 +899,72 @@ void HandleGeneric8k(u32* src, u8 block, u16 address, u8 value)
     }
 }
 
-void HandleGeneric16k(u32* src, u8 block, u16 address, u8 value)
+u8 matra_previoius_blocks[4] = {0,0,0,0};
+u8 matra_compilation_offset = 2;
+
+void __attribute__((noinline)) HandleMatraCompilation(u8 block, u16 address, u8 value)
+{
+    u8 offset_block = block;
+    u8 media_id = bCartInPage[address>>14] - 1;
+
+    if (matra_compilation_offset >= 2) offset_block += (matra_compilation_offset-2);
+    u32 msx_offset = offset_block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
+    
+    if (address == 0x5000)
+    {
+        if (matra_compilation_offset >= 2)
+        {
+            MSXCartPtr[media_id][2] = (u8*)src;
+            MemoryMap[2] = (u8 *)(MSXCartPtr[media_id][2]) - 0x4000;
+            matra_previoius_blocks[0] = block;
+        }
+    }
+    else if (address == 0x6000)
+    {
+        if (matra_compilation_offset >= 2)
+        {
+            MSXCartPtr[media_id][3] = (u8*)src;
+            MemoryMap[3] = (u8 *)(MSXCartPtr[media_id][3]) - 0x6000;
+            matra_previoius_blocks[1] = block;
+        }
+    }
+    else if (address == 0x8000)
+    {
+        if (matra_compilation_offset >= 2)
+        {
+            MSXCartPtr[media_id][4] = (u8*)src;
+            MemoryMap[4] = (u8 *)(MSXCartPtr[media_id][4]) - 0x8000;
+            matra_previoius_blocks[2] = block;
+        }
+    }
+    else if (address == 0xA000)
+    {
+        if (matra_compilation_offset >= 2)
+        {
+            MSXCartPtr[media_id][5] = (u8*)src;
+            MemoryMap[5] = (u8 *)(MSXCartPtr[media_id][5]) - 0xA000;
+            matra_previoius_blocks[3] = block;
+        }
+    }
+    else if (address == 0xBA00) // Offset register
+    {
+        matra_compilation_offset = value;
+        if (matra_compilation_offset >= 2)
+        {
+            for (int i=0; i<4; i++)
+            {
+                offset_block = matra_previoius_blocks[i] + (matra_compilation_offset-2);
+                msx_offset = offset_block * MyMedia[media_id].blockSize;
+                src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
+                MSXCartPtr[media_id][2+i] = (u8*)src;
+                MemoryMap[2+i] = (u8 *)(MSXCartPtr[media_id][2+i]) - (0x2000 * (2+i));
+            }
+        }
+    }
+}
+
+void __attribute__((noinline)) HandleGeneric16k(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -934,7 +1009,7 @@ void HandleGeneric16k(u32* src, u8 block, u16 address, u8 value)
     }
 }
 
-void HandleGameMaster2(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleGameMaster2(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -999,7 +1074,7 @@ void HandleGameMaster2(u32* src, u8 block, u16 address, u8 value)
 // in that it doesn't care if the cart is mapped into view as it will
 // respond to any write to 0x0000 no matter what.
 // ---------------------------------------------------------------------
-void HandleSuperLodeRunner(u8 media_id, u8 value)
+void __attribute__((noinline)) HandleSuperLodeRunner(u8 media_id, u8 value)
 {
     u32 block = (value & MyMedia[media_id].mapperMask);
     u32 msx_offset = block * MyMedia[media_id].blockSize;
@@ -1289,6 +1364,15 @@ void HandleSCCPlus(u16 address, u8 value)
     }
 }
 
+// --------------------------------------------------------------------
+// Handle writes to the Disk Controller (FDC) memory mapped registers.
+// --------------------------------------------------------------------
+void __attribute__((noinline)) HandleDiskControl(u16 address, u8 value)
+{
+    if (address <= 0x7FFB) fdc_write(address & 3, value);
+    if (address == 0x7FFC) fdc_setSide((value & 1) ? 1:0);  // Side: [xxxxxxxS]
+    if (address == 0x7FFD) fdc_setDrive((value & 1) ? 1:0); // Drive: [xxxxxxxD]
+}
 
 // ------------------------------------------------------------------
 // Write memory handles both normal writes and bankswitched since
@@ -1308,9 +1392,7 @@ ITCM_CODE void cpu_writemem16(u16 address, u8 value)
     }
     else if ((special_memory_access & SPEC_MEM_DISK_CONTROLLER) && (address >= 0x7FF8) && (address <= 0x7FFF)) // Disk controller memory map...
     {
-        if (address <= 0x7FFB) fdc_write(address & 3, value);
-        if (address == 0x7FFC) fdc_setSide((value & 1) ? 1:0);  // Side: [xxxxxxxS]
-        if (address == 0x7FFD) fdc_setDrive((value & 1) ? 1:0); // Drive: [xxxxxxxD]
+        HandleDiskControl(address, value);
     }
     else if ((special_memory_access & SPEC_MEM_SUPERLR_ACTIVE) && (address == 0x0000))
     {
@@ -1450,17 +1532,7 @@ ITCM_CODE void cpu_writemem16(u16 address, u8 value)
         }
         else if (MyMedia[media_id].mapperType == MANBOW2)
         {
-            // -----------------------------------------------------------------------------------
-            // Are we writing to the SCC chip memory mapped area and are the registers "in view"?
-            // -----------------------------------------------------------------------------------
-            if ((special_memory_access & SPEC_MEM_SCC_ENABLED) && ((address & 0xF800) == 0x9800))
-            {
-                 SCC_LegacyWrite(value, address&0xFF);
-            }
-            else // We only handle bank switching if the SCC registers were not accessed above...
-            {
-                HandleManbow2(src, block, address, value);
-            }
+            HandleManbow2(src, block, address, value);
         }
         else if (MyMedia[media_id].mapperType == MAJUT)
         {
@@ -1493,6 +1565,10 @@ ITCM_CODE void cpu_writemem16(u16 address, u8 value)
         else if (MyMedia[media_id].mapperType == SCCPLUS_RAM)
         {
             HandleSCCPlus(address, value);
+        }
+        else if (MyMedia[media_id].mapperType == MATRACOMP)
+        {
+            HandleMatraCompilation(block, address, value);
         }
         else if (MyMedia[media_id].mapperType == FMPAC_SRAM)
         {

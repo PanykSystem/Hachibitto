@@ -1583,6 +1583,27 @@ void MSX_CartSetup(u8 media_id)
             MSXCartPtr[media_id][6] = (u8*)Unmapped_Memory;           // Segment Unmapped
             MSXCartPtr[media_id][7] = (u8*)Unmapped_Memory;           // Segment Unmapped
         }
+        else if (MyMedia[media_id].mapperType == MATRACOMP)
+        {
+            extern u8 matra_previoius_blocks[4];
+            extern u8 matra_compilation_offset;
+            
+            matra_previoius_blocks[0] = 0;
+            matra_previoius_blocks[1] = 1;
+            matra_previoius_blocks[2] = 2;
+            matra_previoius_blocks[3] = 3;
+            
+            matra_compilation_offset = 2;
+            
+            MSXCartPtr[media_id][0] = (u8*)Unmapped_Memory;           // Segment Unmapped
+            MSXCartPtr[media_id][1] = (u8*)Unmapped_Memory;           // Segment Unmapped
+            MSXCartPtr[media_id][2] = (u8*)CART_Memory+0x0000;        // Segment 0
+            MSXCartPtr[media_id][3] = (u8*)CART_Memory+0x0000;        // Segment 1
+            MSXCartPtr[media_id][4] = (u8*)CART_Memory+0x2000;        // Segment 2
+            MSXCartPtr[media_id][5] = (u8*)CART_Memory+0x2000;        // Segment 3
+            MSXCartPtr[media_id][6] = (u8*)Unmapped_Memory;           // Segment Unmapped
+            MSXCartPtr[media_id][7] = (u8*)Unmapped_Memory;           // Segment Unmapped
+        }
 
         // ---------------------------------------------------------------------
         // We now set our memory masks such that we page memory in properly...

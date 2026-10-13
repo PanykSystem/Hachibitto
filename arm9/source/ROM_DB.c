@@ -31,39 +31,38 @@ typedef struct {
     u8   mapper;
 } ROM_DB_t;
 
-// Below are the mappers not yet implemented...
-#define ASC16X              0xFF
-#define PAGE23              0xFF
-#define Zemina80in1         0xFF
-#define Zemina90in1         0xFF
-#define Zemina25in1         0xFF
-#define Zemina26in1         0xFF
-#define Zemina126in1        0xFF
-#define NettouYakyuu        0xFF
-#define NEO8                0xFF
-#define NEO16               0xFF
-#define HamarajaNight       0xFF
-#define YAMANOOTO           0xFF
-#define RType               0xFF
-#define ReproCartridgeV1    0xFF
-#define ReproCartridgeV2    0xFF
-#define SuperSwangi         0xFF
-#define RBSC_Flash_SCC8     0xFF
-#define playball            0xFF
-#define keyboardmaster      0xFF
-#define Synthesizer         0xFF
-#define MSXWrite            0xFF
-#define HarryFox            0xFF
-#define dooly               0xFF
-#define WonderKid           0xFF
-#define Arc                 0xFF
-#define Halnote             0xFF
-#define AlQuran             0xFF
-#define AlQuranDecoded      0xFF
-#define MatraCompilation    0xFF
-#define MatraInk            0xFF
-#define RetroHardMulti31in1 0xFF
-#define System              0xFF
+// ---------------------------------------------------------------------------
+// Below are the mappers not yet implemented... and a few comments as to why.
+// ---------------------------------------------------------------------------
+#define ASC16X              0xFF        // 8MB+ carts. Very few games use this currently (more likely coming) but those that do often use other unemulated features (e.g. OPL4 FM).
+#define PAGE23              0xFF        // Strictly needed to play Colecovision carts in their native form. Not supported.
+#define Zemina80in1         0xFF        // Zemina compilation cart - all of which are available in other formats.
+#define Zemina90in1         0xFF        // Zemina compilation cart - all of which are available in other formats.
+#define Zemina25in1         0xFF        // Zemina compilation cart - all of which are available in other formats.
+#define Zemina26in1         0xFF        // Zemina compilation cart - all of which are available in other formats.
+#define Zemina126in1        0xFF        // Zemina compilation cart - all of which are available in other formats.
+#define NettouYakyuu        0xFF        // Uses a sample player chip. No more music mappers for this weary dev!
+#define NEO8                0xFF        // 4MB+ carts. Very few games use this currently (more likely coming) but those that do often use other unemulated features (e.g. OPL4 FM).
+#define NEO16               0xFF        // 4MB+ carts. Very few games use this currently (more likely coming) but those that do often use other unemulated features (e.g. OPL4 FM).
+#define YAMANOOTO           0xFF        // Modern flashcart with some specialized features. Might emulate someday.
+#define RType               0xFF        // The oddly banked original but there are versions available in more sensible mapper formats.
+#define ReproCartridgeV1    0xFF        // For Konami Metal Gear series of which there are roughly 1 billion alternate mappers to pick from.
+#define ReproCartridgeV2    0xFF        // For Konami Metal Gear series of which there are roughly 1 billion alternate mappers to pick from.
+#define SuperSwangi         0xFF        // For Super Swangi - Super Altered Beast - there are conversions to more sensible mappers.
+#define playball            0xFF        // Uses a sample player chip. No more music mappers for this weary dev!
+#define keyboardmaster      0xFF        // Uses voice ROM. Unlikely anyone wants to use this on the handheld.
+#define Synthesizer         0xFF        // Uses 8-bit unsigned and unbuffered Digital-to-Analog (D/A) converter. 
+#define MSXWrite            0xFF        // Requires Japanese KanjiROM. Might add this someday.
+#define HarryFox            0xFF        // Japanese adventure - it has an ASCII16 version floating around you can use instead.
+#define dooly               0xFF        // Only for the original Korean Baby Dinosaur Dooly with some crazy proprietary scheme - use the Mirrored version instead.
+#define WonderKid           0xFF        // For one prototype. Use the ASCII16 conversion instead.
+#define Arc                 0xFF        // ARC by Parallax - needs game disk. There are ASCII8/16 conversions.
+#define Halnote             0xFF        // HAL Laboratory productivity software that is coupled with disk. Might add this someday.
+#define AlQuran             0xFF        // Only for Arabic MSX computers
+#define AlQuranDecoded      0xFF        // Only for Arabic MSX computers
+#define MatraInk            0xFF        // Only for Exxon Surfing.
+#define RetroHardMulti31in1 0xFF        // For a couple of 31-in-1 multicarts that have other more sensible mappers available.
+#define System              0xFF        // For various system BIOS files... unsure yet what can be done here.
 
 const ROM_DB_t ROM_DB[] =
 {
@@ -735,7 +734,7 @@ const ROM_DB_t ROM_DB[] =
   {"113bdabe72f5c12c0d2132e4d1e7924df54c1211", KON8},
   {"113c1ead67b2679ddad9b99506e801526245af05", PAGE23},
   {"11429b42b31e014c313795fa107d156a3c840205", Synthesizer},
-  {"115970209d5b89bdfece9cd941c93feb8faf6b12", MatraCompilation},
+  {"115970209d5b89bdfece9cd941c93feb8faf6b12", MATRACOMP},
   {"11773e7eb2dca727ea293b5aa50ed8094df29f41", MIRRORED},
   {"117d3b783da9c693e3fcb71fd113f7d90895c8d6", MIRRORED},
   {"11927d62332a3310ad462f2f532ac30533c1fc17", MIRRORED},
@@ -3137,7 +3136,7 @@ const ROM_DB_t ROM_DB[] =
   {"51947fc0ae2bc3442b0fee2cccf2344b7a94a167", MIRRORED},
   {"51955f6abe063e553897a218c221e1dd2017d738", ASC8},
   {"519604def4260844a750892d21c017b9019aeea6", MIRRORED},
-  {"51a03f23ad02517a86bdc85feb5be6478399276b", HamarajaNight},
+  {"51a03f23ad02517a86bdc85feb5be6478399276b", HAMARAJANIGHT},
   {"51a1b01f11087e984d78140eb14c81d09bd26b8a", MIRRORED},
   {"51b76ade9d1a94d85351b2f143ae1417dc41cb0d", ASC8},
   {"51b8b4b8c722abc0a580b0d0a1a00cf14c658b3f", MIRRORED},
@@ -3321,7 +3320,7 @@ const ROM_DB_t ROM_DB[] =
   {"56853b5270059e87e8badfd419301da5014594c4", YAMANOOTO},
   {"5685d9ad04d96c1b8da11bb66bac921d6a29c389", MIRRORED},
   {"56871814f7bf60eaaff49aa6792ddbaf5921279d", SCC8},
-  {"5688dc926f87e3cf71050caced90cab29f82af60", MatraCompilation},
+  {"5688dc926f87e3cf71050caced90cab29f82af60", MATRACOMP},
   {"5692e41b3a4c5e767cf290fd6c24942d0fd7b2e3", SCC8},
   {"569b67f3fd191a02921e54c5f09db8ad0279389c", SCC8},
   {"569c5468fcdf9dc9f337c210ab2004199cfa42d8", MIRRORED},
@@ -3495,7 +3494,7 @@ const ROM_DB_t ROM_DB[] =
   {"5b8327655d6a59c2f1cb9f84b80c45db0510b73d", ASC16},
   {"5b8fd60070b8e3e32edf69f305f394f63c27f317", SCC8},
   {"5b98b7009409710e6d3cb1daafab0af03a8eb67d", SCC8},
-  {"5b9a76d4c6eea0fa61544afa5b8c7dcece5608c6", MatraCompilation},
+  {"5b9a76d4c6eea0fa61544afa5b8c7dcece5608c6", MATRACOMP},
   {"5ba5126607b22ef60ad7f1e77e66e8ecac728e87", MIRRORED},
   {"5baac8cd6d119ef5dc7ddacddc3103a4eda2943b", MIRRORED},
   {"5bad656d931e2a1244c48a65b5237e1b22352da6", MIRRORED},
@@ -3743,7 +3742,7 @@ const ROM_DB_t ROM_DB[] =
   {"619a2d42263da74a723cceead5a19e0e0dd86c6f", PAGE2},
   {"619aed957a67dd8ea3bc6a31d0e05ee32eb881ba", KON8},
   {"619eaa8297928aa57c3cbd34bd18f4be48fe662e", SCC8},
-  {"61a67b5684b60f11faf92eec9fe392401616a64b", MatraCompilation},
+  {"61a67b5684b60f11faf92eec9fe392401616a64b", MATRACOMP},
   {"61af243c01f62b5f3ee001dafac56e54bcefb243", SCC8},
   {"61b911a792d1aac1ec8c27e7ee2e6173cefe4565", MIRRORED},
   {"61c1ae30407da58a4385e86be4f35167989a345c", MIRRORED},
@@ -4728,7 +4727,7 @@ const ROM_DB_t ROM_DB[] =
   {"7ca0ca4b9ca9715fe65427ca47c634103e1f7ca3", MIRRORED},
   {"7ca3b8e619d6d94a92b9102efbe4ca68a2c3da6e", KON8},
   {"7ca40f36821dbc99ca326fbfda200a1d42dabce6", SCC8},
-  {"7ca8f0ca8901773fd69bc08eea8a27ac37d6cb3e", MatraCompilation},
+  {"7ca8f0ca8901773fd69bc08eea8a27ac37d6cb3e", MATRACOMP},
   {"7cac4c6f685f35adba50e37356df974977d6ddec", PAGE23},
   {"7cae05a9416e26a7649f7c83d6444eb46f46f6ec", SCC8},
   {"7cd94e0051e1899ae4a5d6ebf3da4c32aa1f6911", MIRRORED},
@@ -6250,7 +6249,7 @@ const ROM_DB_t ROM_DB[] =
   {"a626751cf22a625c05aa6fc78097cd98952e24d5", MIRRORED},
   {"a6293285dad79e2d5f0c7775e0db60367de7909c", MIRRORED},
   {"a63f5eae09623ad78b90a1508b6ab3dc0d383f31", SCC8},
-  {"a648774129139bd9fa2394f6eed29ad03c3af7ff", RBSC_Flash_SCC8},
+  {"a648774129139bd9fa2394f6eed29ad03c3af7ff", RBSC_FLASH},
   {"a668ff92e6f83e37f44178260618bbc650ca61c9", PAGE23},
   {"a66cd128b784041dafebaf8bc94c768cf573be87", PAGE23},
   {"a66e19e58ac5b4da7db071ca7ead40c28a332198", PAGE2},
@@ -6754,7 +6753,7 @@ const ROM_DB_t ROM_DB[] =
   {"b2f2bdfd4141f04e766c6e85a107b49dc15a2571", PAGE2},
   {"b3018835b9772301852f8ac844b2567dfd02d8a1", MIRRORED},
   {"b305f803bc1d7ec84c1be504ce7d67d7f154bb24", MIRRORED},
-  {"b30b17f28e3a3f981cc48102e5c58151ea3fb05c", HamarajaNight},
+  {"b30b17f28e3a3f981cc48102e5c58151ea3fb05c", HAMARAJANIGHT},
   {"b31b68de515469a836bb570ae88fa321059b6602", MIRRORED},
   {"b31b946790daa56190f46c772416add146edcfc5", SCC8},
   {"b31f223dd6304244c49c026e26503b586ebc1885", MIRRORED},
@@ -8994,7 +8993,7 @@ const ROM_DB_t ROM_DB[] =
   {"ef81a612bd7d2f92731ee073b23b884a459aa2a2", ASC8},
   {"ef8eb8f9e735f73c91f3589a0413c9af880fe0ea", SCC8},
   {"ef995a83780cceabd2b68a2a8a366ebbcc36b33b", ASC8},
-  {"ef9c51bd3e8cb6f531a8210f97843e48f368aae4", MatraCompilation},
+  {"ef9c51bd3e8cb6f531a8210f97843e48f368aae4", MATRACOMP},
   {"efa0f16aa6194c2e669d07494dbcf6d9f17853d6", ASC8},
   {"efa3b89899839e062e072921148716e8b82923ce", PAGE23},
   {"efa66c3f6fc6b6e69ae33f8101b04ba9bb706c65", MIRRORED},

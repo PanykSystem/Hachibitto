@@ -887,22 +887,10 @@ static const GameTweak gameTweaks[] =
     // Aggressive frame skip on DS-Lite                                                                                                 
     { "MANBOW",          NULL,                TWEAK_NONE,   FS_AGGRESSIVE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
                                                                                                                                         
-    // MSX-MUSIC - works on DS-Lite                                                                                                     
-    { "LUBECK",          NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "XAK",             NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_LOW  },
-    { "FAMICLE",         NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "FRAY",            NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    // MSX-MUSIC
     { "SINGULAR",        "STONE",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-                                                                                                                                        
-    // MSX-MUSIC + aggressive frame skip on DS-Lite                                                                                     
-    { "LILLY",           "SAGA",              EXP_FM_PAC,   FS_AGGRESSIVE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-                                                                                                                                        
-    // MSX-MUSIC - DSi only                                                                                                             
-    { "ALESTE",          NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "MONOGATARI",      NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "ANGELIC",         "WARRIOR",           EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_MED  },
     { "SLAYER",          "VI",                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "GOLVELLIUS 2",    NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-    { "GOLVELLIUS II",   NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "ILLUSION",        "CITY",              EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "SUPER",           "COOKS",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "PSYCH",           "WORLD",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
@@ -912,6 +900,7 @@ static const GameTweak gameTweaks[] =
     { "FAMILY",          "STADIUM",           EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "FLEET",           "COMMANDER 2",       EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "GAMBLER",         "JIKICHUSHINPA",     EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "LILLY",           "SAGA",              EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "MAISON",          "IKKOKU",            EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "EMERALD",         "DRAGON",            EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "PENGUIN",         "WARS",              EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
@@ -919,6 +908,14 @@ static const GameTweak gameTweaks[] =
     { "LAYDOCK",         "LAST",              EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "THEXDER",         "HAWK",              EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "BLADE",           "LORDS",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_MED  },
+    { "LUBECK",          NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "XAK",             NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_LOW  },
+    { "FAMICLE",         NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "FRAY",            NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "ALESTE",          NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "MONOGATARI",      NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "GOLVELLIUS 2",    NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
+    { "GOLVELLIUS II",   NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "BUSHOUHUUNROKU",  NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "SENKOKUGUNYUDEN", NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "FARDRAUT",        NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
