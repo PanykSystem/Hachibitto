@@ -361,6 +361,11 @@ ITCM_CODE void ProcessDirectAudio(void)
     }
 }
 
+// ------------------------------------------------------------------------------------------------------------
+// On exit from Sound Pause and whenever the sound driver changes (AY -> AY+SCC or AY+MSX-MUSIC), there is a
+// pop/click heard as the new mixer comes online. This routine is designed to perform a simple quick mixing
+// and drive the sample output towards the new target to soften the pop/click. It's not perfect but it helps...
+// ------------------------------------------------------------------------------------------------------------
 mm_word ClickRemoval(mm_word len, mm_addr dest)
 {
     s16 mix1[16];
@@ -413,7 +418,7 @@ ITCM_CODE mm_word OurSoundMixer(mm_word len, mm_addr dest, mm_stream_formats for
     else
     {
         if (bClickRemoveNeeded) return ClickRemoval(len, dest);
-        
+                
         s16 *p = (s16*)dest;
         s16 local_sample = last_sample; // A tiny bit faster to move this locally
         for (int i=0; i<len; i++)
@@ -434,15 +439,15 @@ ITCM_CODE mm_word OurSoundMixer(mm_word len, mm_addr dest, mm_stream_formats for
             YMMixer(len, dest, &myYM);
         }        
         
-        last_sample = ((s16*)dest)[len-1];
+        last_sample = ((s16*)dest)[len-1];        
     }
 
     return  len;
 }
 
 // -----------------------------------------------------------------------------------------------
-// This is our main sound mixer. It's called periodically by the maxmod handler when it needs
-// more samples in the buffer. We generally produce AY output but sometimes mix in SCC or beeper.
+// This is the 'LITE' version of the mixer. It assumes no direct audio processing and simply 
+// grabs fresh samples and mixes them into the output. Faster for the older DS-Lite/Phat hardware.
 // -----------------------------------------------------------------------------------------------
 ITCM_CODE mm_word OurSoundMixer_Lite(mm_word len, mm_addr dest, mm_stream_formats format)
 {
@@ -577,7 +582,6 @@ void sound_chip_reset()
     msx_music_capable_game = 0;      // Until proven otherwise
     lastBeeper = 0;                  // No beeper yet
     scc_sample_idx = 0;              // Direct Audio reset SCC sample position
-    bClickRemoveNeeded = 1;          // Smooth out sound when we transition out of pause
     memset(mixer, 0x00, sizeof(mixer));
     
     // -----------------------------------------------------------

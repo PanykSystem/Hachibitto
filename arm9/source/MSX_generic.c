@@ -1514,19 +1514,35 @@ void DisplayFileNames(void)
 {
     for (int id=0; id < (MEDIA_DISK+1); id++)
     {
-        sprintf(szName, "[%d K] [CRC %08X]", MyMedia[id].filesize/1024, MyMedia[id].filecrc);
-        DSPrint(5, 4+(5*id)+0,0,szName);
-
-        sprintf(szName,"%s",MyMedia[id].filename);
-        for (u8 i=strlen(szName)-1; i>0; i--) if (szName[i] == '.') {szName[i]=0;break;}
-        if (strlen(szName)>24) szName[24]='\0';
-        DSPrint(5, 4+(5*id)+1,0,szName);
-        if (strlen(MyMedia[id].filename) >= 29)   // If there is more than a few characters left, show it on the 2nd line
+        if (MyMedia[id].filecrc == 0xFFFFFFFF)
         {
-            sprintf(szName,"%s",MyMedia[id].filename+24);
+            if (strcmp(MyMedia[id].filename, "FM-PAC") == 0)
+            {
+                DSPrint(6, 4+(5*id)+0,2, "#$%&'()*+,");
+                DSPrint(6, 5+(5*id)+0,2, "CDEFGHIJKL");
+            }
+            else if (strcmp(MyMedia[id].filename, "SCC-I") == 0)
+            {
+                DSPrint(6, 4+(5*id)+0,2, "-./0123");
+                DSPrint(6, 5+(5*id)+0,2, "MNOPQRS");
+            }
+        }
+        else
+        {
+            sprintf(szName, "[%d K] [CRC %08X]", MyMedia[id].filesize/1024, MyMedia[id].filecrc);
+            DSPrint(5, 4+(5*id)+0,0,szName);
+
+            sprintf(szName,"%s",MyMedia[id].filename);
             for (u8 i=strlen(szName)-1; i>0; i--) if (szName[i] == '.') {szName[i]=0;break;}
             if (strlen(szName)>24) szName[24]='\0';
-            DSPrint(5, 4+(5*id)+2,0,szName);
+            DSPrint(5, 4+(5*id)+1,0,szName);
+            if (strlen(MyMedia[id].filename) >= 29)   // If there is more than a few characters left, show it on the 2nd line
+            {
+                sprintf(szName,"%s",MyMedia[id].filename+24);
+                for (u8 i=strlen(szName)-1; i>0; i--) if (szName[i] == '.') {szName[i]=0;break;}
+                if (strlen(szName)>24) szName[24]='\0';
+                DSPrint(5, 4+(5*id)+2,0,szName);
+            }
         }
 
         // If a game is loaded into a slot, we show a red X icon so the user can remove it...
@@ -1608,14 +1624,14 @@ void CheckIfGameHasMusicMapper(void)
     {
         // If the new Config tells us this is an SCC+ game, that slides into CART2
         memset(&MyMedia[MEDIA_CART2], 0x00, sizeof(MyMedia[MEDIA_CART2]));
-        strcpy(MyMedia[MEDIA_CART2].filename, "SCC-I CARTRIDGE");
+        strcpy(MyMedia[MEDIA_CART2].filename, "SCC-I");
         MyMedia[MEDIA_CART2].filecrc = 0xFFFFFFFF;
     }
     else if (myConfig.expansion == MUSIC_MSX)
     {
         // If the new Config tells us this is an MSX-MUSIC game, that slides into CART2
         memset(&MyMedia[MEDIA_CART2], 0x00, sizeof(MyMedia[MEDIA_CART2]));
-        strcpy(MyMedia[MEDIA_CART2].filename, "FM-PAC CARTRIDGE");
+        strcpy(MyMedia[MEDIA_CART2].filename, "FM-PAC");
         MyMedia[MEDIA_CART2].filecrc = 0xFFFFFFFF;
     }
     else if (MyMedia[MEDIA_CART2].filecrc == 0xFFFFFFFF) // Was music mapped in?
