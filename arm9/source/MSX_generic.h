@@ -144,6 +144,8 @@ extern u8 msx_caps_lock;
 extern u8 msx_kana_lock;
 extern u8 mirror_ram_bank[4];
 
+extern u8 zanac_glitch_patch;
+
 #define GUESS           0
 #define MIRRORED        1
 #define KON8            2
@@ -173,9 +175,9 @@ extern u8 mirror_ram_bank[4];
 #define WIZARDRY        72  // Not one of the general mappers a user can pick
 #define KOEISRAM32      73  // Not one of the general mappers a user can pick
 #define MANBOW2         74  // Not one of the general mappers a user can pick
-#define HAMARAJANIGHT   MANBOW2 // Same mapper as MANBOW2 - variant on SCC with flash chip
-#define RBSC_FLASH      MANBOW2 // Same mapper as MANBOW2 - variant on SCC with flash chip
-#define MATRACOMP       75  // Not one of the general mappers a user can pick
+#define HAMARAJANIGHT   75  // Not one of the general mappers a user can pick
+#define RBSC_FLASH      76  // Not one of the general mappers a user can pick
+#define MATRACOMP       77  // Not one of the general mappers a user can pick
 
 #define MEGA_SCC        86  // For our special MEGARAM SCC 'Cart'
 #define FMPAC_SRAM      87  // For our special FM-PAC 'Cart'

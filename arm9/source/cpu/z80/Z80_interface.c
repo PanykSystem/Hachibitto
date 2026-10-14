@@ -702,7 +702,7 @@ void __attribute__((noinline)) HandleMegaSCC(u16 address, u8 value)
 // Very much like Konami SCC but without mirrors and with flash write possibilities...
 // TODO: Handle AMD flash write commands. Until then, only patched/hacked Manbow 2 runs.
 // --------------------------------------------------------------------------------------
-void __attribute__((noinline)) HandleManbow2(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleSCCFlash(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -1530,9 +1530,9 @@ ITCM_CODE void cpu_writemem16(u16 address, u8 value)
         {
             HandleXevious(src, block, address);
         }
-        else if (MyMedia[media_id].mapperType == MANBOW2)
+        else if ((MyMedia[media_id].mapperType == MANBOW2) || (MyMedia[media_id].mapperType == HAMARAJANIGHT) || (MyMedia[media_id].mapperType == RBSC_FLASH))
         {
-            HandleManbow2(src, block, address, value);
+            HandleSCCFlash(src, block, address, value);
         }
         else if (MyMedia[media_id].mapperType == MAJUT)
         {

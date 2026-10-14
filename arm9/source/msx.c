@@ -1572,7 +1572,7 @@ void MSX_CartSetup(u8 media_id)
             MSXCartPtr[media_id][6] = (u8*)CART_Memory+0x0000;        // Segment 0 default
             MSXCartPtr[media_id][7] = (u8*)CART_Memory+0x0000;        // Segment 0 default
         }
-        else if (MyMedia[media_id].mapperType == MANBOW2)
+        else if ((MyMedia[media_id].mapperType == MANBOW2) || (MyMedia[media_id].mapperType == HAMARAJANIGHT) || (MyMedia[media_id].mapperType == RBSC_FLASH))
         {
             MSXCartPtr[media_id][0] = (u8*)Unmapped_Memory;           // Segment Unmapped
             MSXCartPtr[media_id][1] = (u8*)Unmapped_Memory;           // Segment Unmapped

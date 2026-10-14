@@ -86,7 +86,7 @@ u8 *SCC_Memory = RAM_Memory+0x30000;                    // To hold the 64K of SC
 
 u8 io_show_status = 0;      // Used to indicate a disk activity icons
 u8 sram_show_status = 0;    // Used to show SRAM icon for SRAM-based carts
-
+u8 zanac_glitch_patch = 0;  // Only when Zanac EX is loaded to fix corrupt return to menu
 Media_t MyMedia[3];         // Covering CART1, CART2 and DISK
 
 // --------------------------------------------------------------------------
@@ -2443,7 +2443,21 @@ u32 LoopZ80(void)
 
   // Refresh VDP
   Loop9938();
-
+  
+  // ------------------------------------------------------------------------------------
+  // Zanac EX has a graphical glitch on return to main menu due to sensitive timing.
+  // For this game only, we drop the FH flag immediately if IE1 is clear. This is a 
+  // game-specific workaround for an unresolved VDP timing discrepancy. Fix this someday.
+  // ------------------------------------------------------------------------------------
+  if (zanac_glitch_patch)
+  {
+      if (!(VDP[0] & 0x10)) // Clear the FH flag if IE1 is explicitly lowered by the CPU.
+      {
+          VDPStatus[1] &= 0xFE;         // If IE1 (R#0 bit 4) is lowered, FH flag is forced low
+          SetVDPIRQ(VDP_IRQ_LINE, 0);   // And ensure the IRQ is not set for the Line Interrupt
+      }
+  }
+  
   // Generate an interrupt if called for...
   if(CPU.IRequest != INT_NONE)
   {

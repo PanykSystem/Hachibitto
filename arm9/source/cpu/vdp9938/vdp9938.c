@@ -2464,9 +2464,7 @@ ITCM_CODE void Loop9938(void)
          SetVDPIRQ(VDP_IRQ_LINE, 1);
       }
   }
-
-  // Clear the FH flag if IE1 is explicitly lowered by the CPU.
-  if (!(VDP[0] & 0x10))
+  else if (!(VDP[0] & 0x10)) // Clear the FH flag if IE1 is explicitly lowered by the CPU.
   {
       VDPStatus[1] &= 0xFE;         // If IE1 (R#0 bit 4) is lowered, FH flag is forced low
       SetVDPIRQ(VDP_IRQ_LINE, 0);   // And ensure the IRQ is not set for the Line Interrupt

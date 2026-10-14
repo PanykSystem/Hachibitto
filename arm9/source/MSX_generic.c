@@ -990,6 +990,16 @@ void ApplyDatabaseTweaks(void)
         if (t->ymScale != TWEAK_NONE)
             myConfig.ymScale = t->ymScale;
     }
+    
+    // ----------------------------------------------------------
+    // Zanac-EX return to main menu corruption is not yet fixed
+    // properly by more accurate VDP handling... so we patch it.
+    // ----------------------------------------------------------
+    zanac_glitch_patch = 0;
+    if (strstr(filename, "ZANAC-EX") || strstr(filename, "ZANACEX"))
+    {
+        zanac_glitch_patch = 1;
+    }
 }
 
 void MapPlayer1(void)
