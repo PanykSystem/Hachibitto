@@ -700,6 +700,7 @@ void __attribute__((noinline)) HandleMegaSCC(u16 address, u8 value)
 
 // --------------------------------------------------------------------------------------
 // Very much like Konami SCC but without mirrors and with flash write possibilities...
+// Games that use this: Manbow 2, Hamaraja Night, Angelic Warrior, etc.
 // TODO: Handle AMD flash write commands. Until then, only patched/hacked Manbow 2 runs.
 // --------------------------------------------------------------------------------------
 void __attribute__((noinline)) HandleSCCFlash(u32* src, u8 block, u16 address, u8 value)

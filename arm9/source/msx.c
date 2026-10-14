@@ -95,13 +95,13 @@ static uint8_t rtc_ram[4][16] = {
 };
 
 // WRITE PORT 0xB4: Selects Register Index ONLY
-void write_port_RTC_index(uint8_t data)
+__attribute__((noinline)) void write_port_RTC_index(uint8_t data)
 {
     rtc_reg = data & 0x0F; // Only lower 4 bits pick the register!
 }
 
 // WRITE PORT 0xB5: Writes Data into the current Bank & Register
-void write_port_RTC_data(uint8_t data)
+__attribute__((noinline))  void write_port_RTC_data(uint8_t data)
 {
     uint8_t val = data & 0x0F;
 
@@ -166,7 +166,7 @@ void populate_msx_rtc()
 }
 
 // READ PORT 0xB5: Reads Data from current Bank & Register
-uint8_t read_port_RTC_data(void)
+__attribute__((noinline)) uint8_t read_port_RTC_data(void)
 {
     populate_msx_rtc(); // Get current system time/date and populate RTC
 

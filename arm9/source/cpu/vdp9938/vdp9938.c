@@ -648,8 +648,15 @@ ITCM_CODE void ColorSprites(uint8_t Y, u8 *ZBuf)
       if((C&0x0F) || zeroNotTransparent)
       {
         PT = SprGen+((int)(IH>8? AT[2]&0xFC:AT[2])<<3)+J;
-        P=ZBuf+AT[1]+(C&0x80? 0:32);
-        O=OccBuf+AT[1]+(C&0x80? 0:32);
+        
+        int spriteX = AT[1];
+        
+        // Align sprites to the background's 2-pixel scroll quantization.
+        // Prevents 1-pixel sprite jitter in Manbow 2 during horizontal scrolling.
+        if ((HAdjust & 1)) spriteX = (spriteX+1) & ~1;
+            
+        P=ZBuf+spriteX+(C&0x80? 0:32);
+        O=OccBuf+spriteX+(C&0x80? 0:32);
         C&=0x0F;
         J=PT[0];
 
