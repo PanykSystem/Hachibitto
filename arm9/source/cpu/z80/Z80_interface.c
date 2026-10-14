@@ -701,62 +701,178 @@ void __attribute__((noinline)) HandleMegaSCC(u16 address, u8 value)
 // --------------------------------------------------------------------------------------
 // Very much like Konami SCC but without mirrors and with flash write possibilities...
 // Games that use this: Manbow 2, Hamaraja Night, Angelic Warrior, etc.
-// TODO: Handle AMD flash write commands. Until then, only patched/hacked Manbow 2 runs.
 // --------------------------------------------------------------------------------------
+
+// AMD flash command state
+// 0 = waiting for AA
+// 1 = waiting for 55
+// 2 = waiting for A0 (program) or 80 (erase setup)
+// 3 = waiting for program data
+// 4 = erase setup: waiting for AA
+// 5 = erase setup: waiting for 55
+// 6 = waiting for sector erase command (30)
+static u8 sccFlashCommandState = 0;
+
 void __attribute__((noinline)) HandleSCCFlash(u32* src, u8 block, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u8 media_id = bCartInPage[address >> 14] - 1;
 
-    // -----------------------------------------------------------------------------------
-    // Are we writing to the SCC chip memory mapped area and are the registers "in view"?
-    // -----------------------------------------------------------------------------------
+    u16 flash_cmd_addr = address & 0x0FFF;
+
+    // Reset command.
+    if (value == 0xF0 && flash_cmd_addr == 0x0555)
+    {
+        sccFlashCommandState = 0;
+    }
+    else
+    {
+        switch (sccFlashCommandState)
+        {
+            case 0:
+                if (flash_cmd_addr == 0x0555 && value == 0xAA)
+                    sccFlashCommandState = 1;
+                break;
+
+            case 1:
+                if ((flash_cmd_addr == 0x0AAA ||
+                     flash_cmd_addr == 0x02AA) && value == 0x55)
+                {
+                    sccFlashCommandState = 2;
+                }
+                else
+                {
+                    sccFlashCommandState =
+                        (flash_cmd_addr == 0x0555 && value == 0xAA) ? 1 : 0;
+                }
+                break;
+
+            case 2:
+                if (flash_cmd_addr == 0x0555 && value == 0xA0)
+                {
+                    sccFlashCommandState = 3;
+                }
+                else if (flash_cmd_addr == 0x0555 && value == 0x80)
+                {
+                    sccFlashCommandState = 4;
+                }
+                else
+                {
+                    sccFlashCommandState = 0;
+                }
+                break;
+
+            case 3: // Program one byte
+            {
+                u8 bank = address >> 13;
+
+                if (bank < 8 && MSXCartPtr[media_id][bank] != NULL)
+                {
+                    u8 *dest = MSXCartPtr[media_id][bank] + (address & 0x1FFF);
+                    *dest &= value;
+                }
+
+                sccFlashCommandState = 0;
+                sram_show_status = 6;   // TODO: Not really SRAM but for now...
+                break;
+            }
+
+            case 4: // Erase setup: second AA
+                if (flash_cmd_addr == 0x0555 && value == 0xAA)
+                    sccFlashCommandState = 5;
+                else
+                    sccFlashCommandState = 0;
+                break;
+
+            case 5: // Erase setup: second 55
+                if ((flash_cmd_addr == 0x0AAA ||
+                     flash_cmd_addr == 0x02AA) && value == 0x55)
+                    sccFlashCommandState = 6;
+                else
+                    sccFlashCommandState = 0;
+                break;
+
+            case 6: // Sector erase, or ignore chip erase
+                if (value == 0x30)
+                {
+                    u8 bank = address >> 13;
+
+                    if (bank < 8 && MSXCartPtr[media_id][bank] != NULL)
+                    {
+                        sram_show_status = 6;   // TODO: Not really SRAM but for now...
+                        u32 sector_size;
+
+                        if (MyMedia[media_id].mapperType == RBSC_FLASH)
+                            sector_size = 0x10000; // AM29F016D: 64 KB
+                        else
+                            sector_size = 0x1000;  // AM29F040B: 4 KB
+
+                        u8 *dest = MSXCartPtr[media_id][bank] +
+                                   (address & 0x1FFF);
+
+                        // Align to the physical flash sector boundary.
+                        dest = (u8 *)((u32)dest & ~(sector_size - 1));
+
+                        for (u32 i = 0; i < sector_size; i++)
+                            dest[i] = 0xFF;
+                    }
+                }
+                // value == 0x10 is chip erase: intentionally ignored.
+
+                sccFlashCommandState = 0;
+                break;
+
+            default:
+                sccFlashCommandState = 0;
+                break;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Existing SCC handling and mapper bank switching.
+    // -------------------------------------------------------------------------
     if ((special_memory_access & SPEC_MEM_SCC_ENABLED) && ((address & 0xF800) == 0x9800))
     {
-         SCC_LegacyWrite(value, address&0xFF);
+        SCC_LegacyWrite(value, address & 0xFF);
     }
-    else // We only handle bank switching if the SCC registers were not accessed above...
+    else
     {
         if ((address & 0xF800) == 0x5000)
         {
-            MSXCartPtr[media_id][2] = (u8*)src;  // Main ROM
-            MemoryMap[2] = (u8 *)(MSXCartPtr[media_id][2]) - 0x4000;
+            MSXCartPtr[media_id][2] = (u8*)src;
+            MemoryMap[2] = (u8*)MSXCartPtr[media_id][2] - 0x4000;
         }
         else if ((address & 0xF800) == 0x7000)
         {
-            MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
-            MemoryMap[3] = (u8 *)(MSXCartPtr[media_id][3]) - 0x6000;
+            MSXCartPtr[media_id][3] = (u8*)src;
+            MemoryMap[3] = (u8*)MSXCartPtr[media_id][3] - 0x6000;
         }
         else if ((address & 0xF800) == 0x9000)
         {
-            // --------------------------------------------------------------------------------------------------
-            // For standard SCC carts we require the full 0x3F to be programmed to enable the SCC register view.
-            // And yes, the banking logic below is still always called...
-            // --------------------------------------------------------------------------------------------------
             if ((value & 0x3F) == 0x3F)
             {
-                special_memory_access |= SPEC_MEM_SCC_ENABLED;  // SCC Registers are now "in view"
+                special_memory_access |= SPEC_MEM_SCC_ENABLED;
+
                 if (!msx_scc_capable_game)
                 {
-                    msx_scc_capable_game = true;                 // SCC sound - set a flag so we process this special sound chip for this game
+                    msx_scc_capable_game = true;
                     bClickRemoveNeeded = 1;
                 }
             }
             else
             {
-                special_memory_access &= ~SPEC_MEM_SCC_ENABLED; // SCC Registers are no longer "in view"
+                special_memory_access &= ~SPEC_MEM_SCC_ENABLED;
             }
 
-            MSXCartPtr[media_id][4] = (u8*)src;  // Main ROM
-            MemoryMap[4] = (u8 *)(MSXCartPtr[media_id][4]) - 0x8000;
+            MSXCartPtr[media_id][4] = (u8*)src;
+            MemoryMap[4] = (u8*)MSXCartPtr[media_id][4] - 0x8000;
         }
         else if ((address & 0xF800) == 0xB000)
         {
-            MSXCartPtr[media_id][5] = (u8*)src;  // Main ROM
-            MemoryMap[5] = (u8 *)(MSXCartPtr[media_id][5]) - 0xA000;
+            MSXCartPtr[media_id][5] = (u8*)src;
+            MemoryMap[5] = (u8*)MSXCartPtr[media_id][5] - 0xA000;
         }
     }
 }
-
 
 
 // ---------------------------------------------------------------------
