@@ -14,6 +14,7 @@
 #include <nds.h>
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -74,7 +75,7 @@ ITCM_CODE u8 cpu_readmem16(u16 address)
 // 8000h~9FFFh (mirror: 0000h~1FFFh) 8000h (mirrors: 8001h~9FFFh)    2
 // A000h~BFFFh (mirror: 2000h~3FFFh) A000h (mirrors: A001h~BFFFh)    3
 // -----------------------------------------------------------------------
-void HandleZemina8K(u32* src, u8 block, u16 address)
+void __attribute__((noinline)) HandleZemina8K(u32* src, u8 block, u16 address)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -109,7 +110,7 @@ void HandleZemina8K(u32* src, u8 block, u16 address)
 // 4000h~7FFFh  via writes to 4000h-7FFF
 // 8000h~BFFFh  via writes to 8000h-BFFF
 // -------------------------------------------------------------------------
-void HandleZemina16K(u32* src, u8 block, u16 address)
+void __attribute__((noinline)) HandleZemina16K(u32* src, u8 block, u16 address)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -153,7 +154,7 @@ void HandleZemina16K(u32* src, u8 block, u16 address)
 // 4000h~7FFFh  via writes to 6000h to 67FFh
 // 8000h~BFFFh  via writes to 7000h to 77FFh
 // -------------------------------------------------------------------------
-void HandleAscii16(u32* src, u8 block, u16 address)
+void __attribute__((noinline)) HandleAscii16(u32* src, u8 block, u16 address)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -178,7 +179,7 @@ void HandleAscii16(u32* src, u8 block, u16 address)
 
 #define SRAM_ENABLE_BIT     (MyMedia[media_id].mapperMask+1)      // SRAM Enable is the bit right after the rom selection bits...
 
-void HandleAscii8_SRAM2(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleAscii8_SRAM2(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -269,7 +270,7 @@ void HandleAscii8_SRAM2(u32* src, u8 block, u16 address, u8 value)
 }
 
 
-void HandleAscii8_SRAM8(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleAscii8_SRAM8(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -373,7 +374,7 @@ void HandleAscii8_SRAM8(u32* src, u8 block, u16 address, u8 value)
 // ----------------------------------------------
 // ASCII 16K with 2K of SRAM (Hydlide II, etc).
 // ----------------------------------------------
-void HandleAscii16_SRAM2(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleAscii16_SRAM2(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -429,7 +430,7 @@ void HandleAscii16_SRAM2(u32* src, u8 block, u16 address, u8 value)
 // ------------------------------------------------------------
 // ASCII 16K with 8K of SRAM (A-Train is the only known game).
 // ------------------------------------------------------------
-void HandleAscii16_SRAM8(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleAscii16_SRAM8(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -478,7 +479,7 @@ void HandleAscii16_SRAM8(u32* src, u8 block, u16 address, u8 value)
     }
 }
 
-void HandleKoei_SRAM32K(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleKoei_SRAM32K(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -576,7 +577,67 @@ void HandleKoei_SRAM32K(u32* src, u8 block, u16 address, u8 value)
     }
 }
 
-void HandleKonamiSCC8(u32* src, u8 block, u16 address, u8 value)
+// -------------------------------------------------------------------------
+// The ASCII 8K Mapper:
+// 4000h~5FFFh (mirror: C000h~DFFFh)    6000h (mirrors: 6001h~67FFh)    0
+// 6000h~7FFFh (mirror: E000h~FFFFh)    6800h (mirrors: 6801h~68FFh)    0
+// 8000h~9FFFh (mirror: 0000h~1FFFh)    7000h (mirrors: 7001h~77FFh)    0
+// A000h~BFFFh (mirror: 2000h~3FFFh)    7800h (mirrors: 7801h~7FFFh)    0
+// -------------------------------------------------------------------------
+void __attribute__((noinline)) HandleAscii8(u32* src, u8 block, u16 address, u8 value)
+{
+    u8 media_id = bCartInPage[address>>14] - 1;
+    
+    if ((address & 0xF800) == 0x6000)
+    {
+        MSXCartPtr[media_id][2] = (u8*)src;  // Main ROM
+        MSXCartPtr[media_id][6] = (u8*)src;  // Mirror
+        MemoryMap[2] = MSXCartPtr[media_id][2] - 0x4000;
+        if (bCartInPage[3] == (media_id+1))
+        {
+            MemoryMap[6] = MSXCartPtr[media_id][6] - 0xC000;
+        }
+    }
+    else if ((address & 0xF800) == 0x6800)
+    {
+        MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
+        MSXCartPtr[media_id][7] = (u8*)src;  // Mirror
+        MemoryMap[3] = MSXCartPtr[media_id][3] - 0x6000;
+        if (bCartInPage[3] == (media_id+1))
+        {
+            MemoryMap[7] = MSXCartPtr[media_id][7] - 0xE000;
+        }
+    }
+    else if ((address & 0xF800) == 0x7000)
+    {
+        MSXCartPtr[media_id][4] = (u8*)src;  // Main ROM
+        MSXCartPtr[media_id][0] = (u8*)src;  // Mirror
+        if (bCartInPage[2] == (media_id+1))
+        {
+            MemoryMap[4] = MSXCartPtr[media_id][4] - 0x8000;
+        }
+        if (bCartInPage[0] == (media_id+1))
+        {
+            MemoryMap[0] = MSXCartPtr[media_id][0] - 0x0000;
+        }
+    }
+    else if ((address & 0xF800) == 0x7800)
+    {
+        MSXCartPtr[media_id][5] = (u8*)src;  // Main ROM
+        MSXCartPtr[media_id][1] = (u8*)src;  // Mirror
+        if (bCartInPage[2] == (media_id+1))
+        {
+            MemoryMap[5] = MSXCartPtr[media_id][5] - 0xA000;
+        }
+        if (bCartInPage[0] == (media_id+1))
+        {
+            MemoryMap[1] = MSXCartPtr[media_id][1] - 0x2000;
+        }
+    }
+}
+
+            
+void __attribute__((noinline)) HandleKonamiSCC8(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -772,7 +833,7 @@ void __attribute__((noinline)) HandleSCCFlash(u32* src, u8 block, u16 address, u
                 }
 
                 sccFlashCommandState = 0;
-                sram_show_status = 6;   // TODO: Not really SRAM but for now...
+                flash_show_status = 4;
                 break;
             }
 
@@ -798,22 +859,38 @@ void __attribute__((noinline)) HandleSCCFlash(u32* src, u8 block, u16 address, u
 
                     if (bank < 8 && MSXCartPtr[media_id][bank] != NULL)
                     {
-                        sram_show_status = 6;   // TODO: Not really SRAM but for now...
                         u32 sector_size;
+                        u32 flash_size;
 
                         if (MyMedia[media_id].mapperType == RBSC_FLASH)
+                        {
                             sector_size = 0x10000; // AM29F016D: 64 KB
+                            flash_size = 0x200000; // 2 MB
+                        }
                         else
-                            sector_size = 0x1000;  // AM29F040B: 4 KB
+                        {
+                            sector_size = 0x10000; // AM29F040B: 64 KB
+                            flash_size = 0x80000;  // 512 KB
+                        }
 
-                        u8 *dest = MSXCartPtr[media_id][bank] +
-                                   (address & 0x1FFF);
+                        u32 cart_capacity = (MAX_CART_SIZE_KB / 2) * 1024;
+                        if (flash_size > cart_capacity)
+                            flash_size = cart_capacity;
 
-                        // Align to the physical flash sector boundary.
-                        dest = (u8 *)((u32)dest & ~(sector_size - 1));
+                        uintptr_t cart_base = (uintptr_t)ROM_Memory + (uintptr_t)media_id * cart_capacity;
+                        uintptr_t dest = (uintptr_t)MSXCartPtr[media_id][bank] + (address & 0x1FFF);
 
-                        for (u32 i = 0; i < sector_size; i++)
-                            dest[i] = 0xFF;
+                        if ((dest >= cart_base) && (dest - cart_base < flash_size))
+                        {
+                            u32 offset = (u32)(dest - cart_base);
+                            u32 sector_offset = offset & ~(sector_size - 1);
+
+                            if (sector_offset <= flash_size - sector_size)
+                            {
+                                memset((void *)(cart_base + sector_offset), 0xFF, sector_size);
+                                flash_show_status = 4;
+                            }
+                        }
                     }
                 }
                 // value == 0x10 is chip erase: intentionally ignored.
@@ -1211,7 +1288,7 @@ void __attribute__((noinline)) HandleSuperLodeRunner(u8 media_id, u8 value)
 // This is really the same as ASCII-8 with 8K of SRAM but it uses bit 7 for SRAM access
 // -------------------------------------------------------------------------------------
 #define SRAM_ENABLE_BIT_WIZARDRY    0x80
-void HandleWizardry(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleWizardry(u32* src, u8 block, u16 address, u8 value)
 {
     u8 media_id = bCartInPage[address>>14] - 1;
 
@@ -1318,7 +1395,7 @@ void HandleWizardry(u32* src, u8 block, u16 address, u8 value)
 // -------------------------------------------------------------------
 #define FMPAC_KEY1 0x4D
 #define FMPAC_KEY2 0x69
-void HandleFMPAC(u16 address, u8 value)
+void __attribute__((noinline)) HandleFMPAC(u16 address, u8 value)
 {
     if (address == 0x5FFE)
     {
@@ -1406,7 +1483,7 @@ void HandleSCCPlusBankSelect(u16 address, u8 value)
     }
 }
 
-void HandleSCCPlusModeRegister(u8 value)
+void __attribute__((noinline)) HandleSCCPlusModeRegister(u8 value)
 {
     sccplus_mode = value;
 
@@ -1436,7 +1513,7 @@ void HandleSCCPlusModeRegister(u8 value)
     // that window get interpreted, which cpu_writemem16 checks live below.
 }
 
-void HandleSCCPlus(u16 address, u8 value)
+void __attribute__((noinline)) HandleSCCPlus(u16 address, u8 value)
 {
     // Mode Register - always intercepted whenever the cart occupies 8000-BFFF
     if ((bCartInPage[2] == 2) && (address == 0xBFFE || address == 0xBFFF))
@@ -1565,59 +1642,7 @@ ITCM_CODE void cpu_writemem16(u16 address, u8 value)
         }
         else if (MyMedia[media_id].mapperType == ASC8)
         {
-            // -------------------------------------------------------------------------
-            // The ASCII 8K Mapper:
-            // 4000h~5FFFh (mirror: C000h~DFFFh)    6000h (mirrors: 6001h~67FFh)    0
-            // 6000h~7FFFh (mirror: E000h~FFFFh)    6800h (mirrors: 6801h~68FFh)    0
-            // 8000h~9FFFh (mirror: 0000h~1FFFh)    7000h (mirrors: 7001h~77FFh)    0
-            // A000h~BFFFh (mirror: 2000h~3FFFh)    7800h (mirrors: 7801h~7FFFh)    0
-            // -------------------------------------------------------------------------
-            if ((address & 0xF800) == 0x6000)
-            {
-                MSXCartPtr[media_id][2] = (u8*)src;  // Main ROM
-                MSXCartPtr[media_id][6] = (u8*)src;  // Mirror
-                MemoryMap[2] = MSXCartPtr[media_id][2] - 0x4000;
-                if (bCartInPage[3] == (media_id+1))
-                {
-                    MemoryMap[6] = MSXCartPtr[media_id][6] - 0xC000;
-                }
-            }
-            else if ((address & 0xF800) == 0x6800)
-            {
-                MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
-                MSXCartPtr[media_id][7] = (u8*)src;  // Mirror
-                MemoryMap[3] = MSXCartPtr[media_id][3] - 0x6000;
-                if (bCartInPage[3] == (media_id+1))
-                {
-                    MemoryMap[7] = MSXCartPtr[media_id][7] - 0xE000;
-                }
-            }
-            else if ((address & 0xF800) == 0x7000)
-            {
-                MSXCartPtr[media_id][4] = (u8*)src;  // Main ROM
-                MSXCartPtr[media_id][0] = (u8*)src;  // Mirror
-                if (bCartInPage[2] == (media_id+1))
-                {
-                    MemoryMap[4] = MSXCartPtr[media_id][4] - 0x8000;
-                }
-                if (bCartInPage[0] == (media_id+1))
-                {
-                    MemoryMap[0] = MSXCartPtr[media_id][0] - 0x0000;
-                }
-            }
-            else if ((address & 0xF800) == 0x7800)
-            {
-                MSXCartPtr[media_id][5] = (u8*)src;  // Main ROM
-                MSXCartPtr[media_id][1] = (u8*)src;  // Mirror
-                if (bCartInPage[2] == (media_id+1))
-                {
-                    MemoryMap[5] = MSXCartPtr[media_id][5] - 0xA000;
-                }
-                if (bCartInPage[0] == (media_id+1))
-                {
-                    MemoryMap[1] = MSXCartPtr[media_id][1] - 0x2000;
-                }
-            }
+            HandleAscii8(src, block, address, value);
         }
         else if (MyMedia[media_id].mapperType == SCC8)
         {

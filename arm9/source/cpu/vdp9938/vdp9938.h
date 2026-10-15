@@ -3,6 +3,10 @@
 
 #include <nds.h>
 
+#define likely(x)   __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+
+
 #define MAXSCREEN           9   // Highest screen mode supported
 
 #define VDP9938_BASE        10738635    // Standard 3.58 Mhz
@@ -96,30 +100,44 @@ extern void write_port_palette(uint8_t data);
 
 extern u16 CurLine;                            // Current Scanline
 extern u8 VDP[64],VDPStatus[10],VDPDlatch;     // VDP registers
-extern u16 VAddr;                              // Storage for VIDRAM addresses
+extern u16 VAddr;                              // Storage for VRAM addresses
 extern u8 VDPCtrlLatch;                        // VDP control latch
 extern u8 *ChrGen,*ChrTab,*ColTab;             // VDP tables (screens)
 extern u8 *SprGen,*SprTab;                     // VDP tables (sprites)
 extern u8 ScrMode;                             // Current screen mode
 extern u8 FGColor,BGColor;                     // Colors
 extern u32 ColTabM, ChrGenM;                   // Color and Character Masks
+extern u8 *VPAGE8;                             // Cached Screen8 pointer
 extern u32 ChrTabM;
 extern u32 ColTabM;
 extern u32 ChrGenM;
 extern u32 SprTabM;
-extern u8 Screen8_rendered;
+
+static inline __attribute__((always_inline)) u32 VDP9938Screen8Address(u32 address)
+{
+  return (address >> 1) | ((address & 1) << 16);
+}
+
+static inline __attribute__((always_inline)) u8 *VDP9938Screen8DataPointer(void)
+{
+  return VPAGE8 + ((VAddr >> 1) | ((u32)(VAddr & 1) << 16));
+}
 
 /** WrData9938() *********************************************/
 /** Write a value V to the VDP Data Port.                   **/
 /*************************************************************/
 static inline __attribute__((always_inline)) void WrData9938(byte V)  // This one is used frequently so we always inline it
 {
-    VDPDlatch = VPAGE[VAddr] = V;
+    if (unlikely(ScrMode == 8))
+      VDPDlatch = *VDP9938Screen8DataPointer() = V;
+    else
+      VDPDlatch = VPAGE[VAddr] = V;
     VAddr     = (VAddr+1)&0x3FFF;
     if(!VAddr&&(ScrMode&0xFC))
     {
       VDP[14]=(VDP[14]+1)&7;
       VPAGE=VDP_Memory+((int)VDP[14]<<14);
+      VPAGE8=VDP_Memory+((int)VDP[14]<<13);
     }
     VDPCtrlLatch = 0;
 }

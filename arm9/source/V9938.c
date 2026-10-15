@@ -40,7 +40,7 @@
 #define VDP_VRMP5(X, Y) (VDP_Memory + ((Y&1023)<<7) + ((X&255)>>1))
 #define VDP_VRMP6(X, Y) (VDP_Memory + ((Y&1023)<<7) + ((X&511)>>2))
 #define VDP_VRMP7(X, Y) (VDP_Memory + ((Y&511)<<8) + ((X&511)>>1))
-#define VDP_VRMP8(X, Y) (VDP_Memory + ((Y&511)<<8) + (X&255))
+#define VDP_VRMP8(X, Y) (VDP_Memory + VDP9938Screen8Address(((Y&511)<<8) + (X&255)))
 
 #define VDP_VRMP(M, X, Y) VDPVRMP(M, X, Y)
 #define VDP_POINT(M, X, Y) VDPpoint(M, X, Y)

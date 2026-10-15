@@ -202,6 +202,7 @@ extern u8 skip_render;
 extern int bg0, bg1, bg0b, bg1b;
 extern u8 io_show_status;
 extern u8 sram_show_status;
+extern u8 flash_show_status;
 
 extern void BottomScreenOptions(void);
 extern void BottomScreenMiniMenu(void);

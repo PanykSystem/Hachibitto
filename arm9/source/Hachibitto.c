@@ -86,6 +86,7 @@ u8 *SCC_Memory = RAM_Memory+0x30000;                    // To hold the 64K of SC
 
 u8 io_show_status = 0;      // Used to indicate a disk activity icons
 u8 sram_show_status = 0;    // Used to show SRAM icon for SRAM-based carts
+u8 flash_show_status = 0;   // Used to show Flash (lightning bolt) icon for Flash-based carts
 u8 zanac_glitch_patch = 0;  // Only when Zanac EX is loaded to fix corrupt return to menu
 Media_t MyMedia[3];         // Covering CART1, CART2 and DISK
 
@@ -669,6 +670,7 @@ void ResetMSX(void)
     skip_render = 0;
     io_show_status = 0;
     sram_show_status = 0;
+    flash_show_status = 0;
     render_blended = 0;
 }
 
@@ -697,7 +699,7 @@ int getMemFree() { // returns the amount of free memory in bytes
 void ShowDebugZ80(void)
 {
     u8 idx=1;
-
+    
     sprintf(tmp, "VDP: %02X %02X %02X %02X %02X %02X %02X %02X", VDP[0],VDP[1],VDP[2],VDP[3], VDP[4],VDP[5],VDP[6],VDP[7]);
     DSPrint(0,idx++,7, tmp);
     sprintf(tmp, "VDP: %02X %02X %02X %02X %02X %02X %02X %02X", VDP[8],VDP[9],VDP[10],VDP[11], VDP[12],VDP[13],VDP[14],VDP[15]);
@@ -764,6 +766,19 @@ void DisplayStatusLine(void)
         if (--sram_show_status == 0)
         {
             msxSaveSRAM();
+        }
+    }
+    else if (flash_show_status)
+    {
+        DSPrint(20,0,0, " ");
+        DSPrint(21,0,2, "?");  // Show Flash Write icon
+        DSPrint(22,0,0, " ");
+        DSPrint(20,1,0, " ");
+        DSPrint(21,1,2, "_");  // Show Flash Write icon
+        DSPrint(22,1,0, " ");
+        if (--flash_show_status == 0)
+        {
+            // TODO: Write flash to SD?
         }
     }
     else if (io_show_status)
@@ -1109,34 +1124,6 @@ u8 handle_debugger_overlay(u16 iTx, u16 iTy)
     return MENU_CHOICE_NONE;
 }
 
-void PatchManbow2Screen(void)
-{
-    memset(XBuf, 0x00, 256*20);
-    memset(XBuf+(256*145), 0x00, 256*11);
-
-    memset(XBuf+(256*156), 0x00, 102);
-    memset(XBuf+(256*157), 0x00, 102);
-    memset(XBuf+(256*158), 0x00, 102);
-    memset(XBuf+(256*159), 0x00, 102);
-    memset(XBuf+(256*160), 0x00, 102);
-    memset(XBuf+(256*161), 0x00, 102);
-
-    memset(XBuf+(256*159)+137, 0x00, 1);
-    memset(XBuf+(256*161)+137, 0x00, 1);
-
-    memset(XBuf+(256*156)+156, 0x00, 100);
-    memset(XBuf+(256*157)+156, 0x00, 100);
-    memset(XBuf+(256*158)+156, 0x00, 100);
-    memset(XBuf+(256*159)+156, 0x00, 100);
-    memset(XBuf+(256*160)+156, 0x00, 100);
-    memset(XBuf+(256*161)+156, 0x00, 100);
-
-    memset(XBuf+(256*162), 0x00, 256*30);
-    Screen8_rendered = 0;
-
-}
-
-
 // ----------------------------------------------------------------------------
 // Slide-n-Glide D-pad keeps moving in the last known direction for a few more
 // frames to help make those hairpin turns up and off ladders much easier...
@@ -1245,13 +1232,6 @@ void HachibittoRunEmu(void)
             DisplayStatusLine();
         }
         
-        // Special MANBOW 2 Screen fix-up... due to the nature of Screen 5/8 split
-        // and interlaced VRAM handling which is NOT present in Hachibitto...
-        if ((MyMedia[MEDIA_CART1].mapperType == MANBOW2) && Screen8_rendered)
-        {
-            PatchManbow2Screen();
-        }
-
         // -----------------------------------------------------
         // Vertical Sync reduces tearing but costs CPU time...
         // -----------------------------------------------------

@@ -37,8 +37,6 @@ u8 CurrentEpochSaved        __attribute__((section(".dtcm"))) = 0;
 u8 msx_irq_pending          __attribute__((section(".dtcm"))) = 0;   // Bitmask, one bit per VDP interrupt source
 u8 palette_latch            __attribute__((section(".dtcm"))) = 0;
 u16 screenPanX              __attribute__((section(".dtcm"))) = 0;   // Horizontal pan in output pixels: 0, 2, 4, ... 256
-u8 Screen8LineHasSprites    __attribute__((section(".dtcm"))) = 0;   // Sprite rendering on Scree 8 is expensive... track it
-u8 Screen8_rendered         __attribute__((section(".dtcm"))) = 0;   // If Screen 8 rendered, it might matter to patch MANBOW 2
 
 u8 frame_draw_mask[3][16]   __attribute__((section(".dtcm"))) = {
                             {1,1,1,1,1,1,1,1,   1,1,1,1,1,1,1,1},  // No frameskip: 100% (every frame drawn)
@@ -248,6 +246,7 @@ u8 VDPStatus[10]    __attribute__((section(".dtcm")));      // VDP Status Regist
 u8 VDPDlatch        __attribute__((section(".dtcm")));      // VDP register D Latch
 u16 VAddr           __attribute__((section(".dtcm")));      // VDP Video Address (Will be a 17-bit VDP9938 addresses via VPAGE[])
 u8 *VPAGE           __attribute__((section(".dtcm")));      // VDP Video Page (to allow up to 128K support)
+u8 *VPAGE8          __attribute__((section(".dtcm")));      // VDP Video Page (specific to interlaced Screen 8)
 u8 VDPCtrlLatch     __attribute__((section(".dtcm")));      // VDP control latch key
 u8 *ChrGen          __attribute__((section(".dtcm")));      // VDP tables (screens)
 u8 *ChrTab          __attribute__((section(".dtcm")));      // VDP tables (screens)
@@ -574,9 +573,6 @@ ITCM_CODE void ColorSprites(uint8_t Y, u8 *ZBuf)
   // Local copy is slightly faster than a global fetch...
   u8 CurrentEpoch = (++CurrentEpochSaved);
 
-  // Assume no sprites until proven otherwise
-  Screen8LineHasSprites = 0;
-
   /* SPR_SET: unconditional overwrite (background OR earlier-sprite pixel),
      and record that this pixel now holds sprite data.
      SPR_OR:   only really OR if a sprite already touched this pixel this
@@ -627,9 +623,6 @@ ITCM_CODE void ColorSprites(uint8_t Y, u8 *ZBuf)
 
   /* Mark last checked sprite (9th in line, Y=216, or sprite #31) */
   VDPStatus[0]|=L<32? L:31;
-
-  // Mark if Screen has any sprites for Screen 8 fast processing
-  Screen8LineHasSprites = (M != 0);
 
   u8 zeroNotTransparent = (VDP[8]&0x20); // Zero index is a real color.. we can use BG_PALETTE[16]
 
@@ -814,6 +807,283 @@ ITCM_CODE void ColorSprites(uint8_t Y, u8 *ZBuf)
 
       /* Update overlapping flag */
       OrThem>>=1;
+    }
+
+#undef SPR_SET
+#undef SPR_OR
+#undef SPR_SET16
+}
+
+static inline u8 Screen8SpriteByte(const u8 *base, int offset)
+{
+        u32 address = ((u32)(base - VDP_Memory) + offset) & 0x1FFFF;
+        return VDP_Memory[VDP9938Screen8Address(address)];
+}
+
+u8 DoesScreen8LineHaveSprites(uint8_t Y)
+{
+    static const uint8_t SprHeights[4] = { 8,16,16,32 };
+    uint8_t IH,OH;
+    uint8_t *AT;
+    int L,K;
+    unsigned int M;
+
+    if(SpritesOFF) return 0;
+
+    OH = SprHeights[VDP[1]&0x03];
+    IH = SprHeights[VDP[1]&0x02];
+    AT = SprTab-4;
+    M  = 0;
+
+    for(L=0;L<32;++L)
+    {
+        M<<=1;AT+=4;
+        K=Screen8SpriteByte(SprTab,AT-SprTab);
+        if(K==216) break;
+        K=(uint8_t)(K-VScroll);
+        if(K>256-IH) K-=256;
+        if((Y>K)&&(Y<=K+OH))
+        {
+            M|=1;
+            break;
+        }
+    }
+
+    return (M != 0);
+}
+
+void ColorSpritesScreen8(uint8_t Y, u8 *ZBuf)
+{
+    static const uint8_t SprHeights[4] = { 8,16,16,32 };
+    uint8_t C,IH,OH,J,OrThem;
+    uint8_t *P,*PT,*AT,*O;
+    int L,K;
+    int spriteMinX = 256;
+    int spriteMaxX = 0;
+    unsigned int M;
+
+    u8 CurrentEpoch = (++CurrentEpochSaved);
+
+#define SPR_SET(n) do{ P[n]=C; O[n]=CurrentEpoch; }while(0)
+#define SPR_OR(n)  do{ if(O[n]==CurrentEpoch) P[n]|=C; else { P[n]=C; O[n]=CurrentEpoch; } }while(0)
+#define SPR_SET16(n) do{ *(u16 *)(P+n) = (u16)C | ((u16)C<<8); *(u16 *)(O+n) = (u16)CurrentEpoch | ((u16)CurrentEpoch<<8); }while(0)
+
+    VDPStatus[0]&=~0x5F;
+    if(SpritesOFF) return;
+
+    OrThem = 0x00;
+    OH = SprHeights[VDP[1]&0x03];
+    IH = SprHeights[VDP[1]&0x02];
+    AT = SprTab-4;
+    C  = MAXSPRITE2+1;
+    M  = 0;
+
+    for(L=0;L<32;++L)
+    {
+        M<<=1;AT+=4;
+        K=Screen8SpriteByte(SprTab,AT-SprTab);
+        if(K==216) break;
+        K=(uint8_t)(K-VScroll);
+        if(K>256-IH) K-=256;
+        if((Y>K)&&(Y<=K+OH))
+        {
+            if(!--C)
+            {
+                VDPStatus[0]|=0x40;
+                if (!myConfig.maxSprites) break;
+            }
+            M|=1;
+        }
+    }
+
+    VDPStatus[0]|=L<32? L:31;
+    u8 zeroNotTransparent = (VDP[8]&0x20);
+
+    for(;M;M>>=1,AT-=4)
+        if(M&1)
+        {
+            K=(uint8_t)(Screen8SpriteByte(SprTab,AT-SprTab)-VScroll);
+            if(K>256-IH) K-=256;
+            J=Y-K-1;
+            J = OH>IH? (J>>1):J;
+            C=Screen8SpriteByte(SprTab,-0x0200+((AT-SprTab)<<2)+J);
+            OrThem|=C&0x40;
+
+            if((C&0x0F) || zeroNotTransparent)
+            {
+                PT = SprGen+((int)(IH>8? Screen8SpriteByte(SprTab,AT-SprTab+2)&0xFC:Screen8SpriteByte(SprTab,AT-SprTab+2))<<3)+J;
+                int spriteX = Screen8SpriteByte(SprTab,AT-SprTab+1);
+                if ((HAdjust & 1)) spriteX = (spriteX+1) & ~1;
+
+                int visibleLeft = spriteX - ((C&0x80)? 32:0);
+                int visibleRight = visibleLeft + OH;
+                if (visibleLeft < spriteMinX) spriteMinX = visibleLeft;
+                if (visibleRight > spriteMaxX) spriteMaxX = visibleRight;
+
+                P=ZBuf+spriteX+(C&0x80? 0:32);
+                O=OccBuf+spriteX+(C&0x80? 0:32);
+                C&=0x0F;
+                J=Screen8SpriteByte(SprGen,PT-SprGen);
+
+                if(OrThem&0x20)
+                {
+                    if(OH>IH)
+                    {
+                        if (J)
+                        {
+                                if(J&0x80) { SPR_OR(0);SPR_OR(1); }
+                                if(J&0x40) { SPR_OR(2);SPR_OR(3); }
+                                if(J&0x20) { SPR_OR(4);SPR_OR(5); }
+                                if(J&0x10) { SPR_OR(6);SPR_OR(7); }
+                                if(J&0x08) { SPR_OR(8);SPR_OR(9); }
+                                if(J&0x04) { SPR_OR(10);SPR_OR(11); }
+                                if(J&0x02) { SPR_OR(12);SPR_OR(13); }
+                                if(J&0x01) { SPR_OR(14);SPR_OR(15); }
+                        }
+                        if(IH>8)
+                        {
+                            J=Screen8SpriteByte(SprGen,PT-SprGen+16);
+                            if (J)
+                            {
+                                    if(J&0x80) { SPR_OR(16);SPR_OR(17); }
+                                    if(J&0x40) { SPR_OR(18);SPR_OR(19); }
+                                    if(J&0x20) { SPR_OR(20);SPR_OR(21); }
+                                    if(J&0x10) { SPR_OR(22);SPR_OR(23); }
+                                    if(J&0x08) { SPR_OR(24);SPR_OR(25); }
+                                    if(J&0x04) { SPR_OR(26);SPR_OR(27); }
+                                    if(J&0x02) { SPR_OR(28);SPR_OR(29); }
+                                    if(J&0x01) { SPR_OR(30);SPR_OR(31); }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (J)
+                        {
+                                if(J&0x80) SPR_OR(0);
+                                if(J&0x40) SPR_OR(1);
+                                if(J&0x20) SPR_OR(2);
+                                if(J&0x10) SPR_OR(3);
+                                if(J&0x08) SPR_OR(4);
+                                if(J&0x04) SPR_OR(5);
+                                if(J&0x02) SPR_OR(6);
+                                if(J&0x01) SPR_OR(7);
+                        }
+                        if(IH>8)
+                        {
+                            J=Screen8SpriteByte(SprGen,PT-SprGen+16);
+                            if (J)
+                            {
+                                    if(J&0x80) SPR_OR(8);
+                                    if(J&0x40) SPR_OR(9);
+                                    if(J&0x20) SPR_OR(10);
+                                    if(J&0x10) SPR_OR(11);
+                                    if(J&0x08) SPR_OR(12);
+                                    if(J&0x04) SPR_OR(13);
+                                    if(J&0x02) SPR_OR(14);
+                                    if(J&0x01) SPR_OR(15);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if(OH>IH)
+                    {
+                        if (J)
+                        {
+                                if ((u32)P&1)
+                                {
+                                        if(J&0x80) { SPR_SET(0);SPR_SET(1); }
+                                        if(J&0x40) { SPR_SET(2);SPR_SET(3); }
+                                        if(J&0x20) { SPR_SET(4);SPR_SET(5); }
+                                        if(J&0x10) { SPR_SET(6);SPR_SET(7); }
+                                        if(J&0x08) { SPR_SET(8);SPR_SET(9); }
+                                        if(J&0x04) { SPR_SET(10);SPR_SET(11); }
+                                        if(J&0x02) { SPR_SET(12);SPR_SET(13); }
+                                        if(J&0x01) { SPR_SET(14);SPR_SET(15); }
+                                }
+                                else
+                                {
+                                        if(J&0x80) { SPR_SET16(0); }
+                                        if(J&0x40) { SPR_SET16(2); }
+                                        if(J&0x20) { SPR_SET16(4); }
+                                        if(J&0x10) { SPR_SET16(6); }
+                                        if(J&0x08) { SPR_SET16(8); }
+                                        if(J&0x04) { SPR_SET16(10); }
+                                        if(J&0x02) { SPR_SET16(12); }
+                                        if(J&0x01) { SPR_SET16(14); }
+                                }
+                        }
+                        if(IH>8)
+                        {
+                            J=Screen8SpriteByte(SprGen,PT-SprGen+16);
+                            if (J)
+                            {
+                                if ((u32)P&1)
+                                {
+                                    if(J&0x80) { SPR_SET(16);SPR_SET(17); }
+                                    if(J&0x40) { SPR_SET(18);SPR_SET(19); }
+                                    if(J&0x20) { SPR_SET(20);SPR_SET(21); }
+                                    if(J&0x10) { SPR_SET(22);SPR_SET(23); }
+                                    if(J&0x08) { SPR_SET(24);SPR_SET(25); }
+                                    if(J&0x04) { SPR_SET(26);SPR_SET(27); }
+                                    if(J&0x02) { SPR_SET(28);SPR_SET(29); }
+                                    if(J&0x01) { SPR_SET(30);SPR_SET(31); }
+                                }
+                                else
+                                {
+                                    if(J&0x80) { SPR_SET16(16); }
+                                    if(J&0x40) { SPR_SET16(18); }
+                                    if(J&0x20) { SPR_SET16(20); }
+                                    if(J&0x10) { SPR_SET16(22); }
+                                    if(J&0x08) { SPR_SET16(24); }
+                                    if(J&0x04) { SPR_SET16(26); }
+                                    if(J&0x02) { SPR_SET16(28); }
+                                    if(J&0x01) { SPR_SET16(30); }
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (J)
+                        {
+                                if(J&0x80) SPR_SET(0);
+                                if(J&0x40) SPR_SET(1);
+                                if(J&0x20) SPR_SET(2);
+                                if(J&0x10) SPR_SET(3);
+                                if(J&0x08) SPR_SET(4);
+                                if(J&0x04) SPR_SET(5);
+                                if(J&0x02) SPR_SET(6);
+                                if(J&0x01) SPR_SET(7);
+                        }
+                        if(IH>8)
+                        {
+                            J=Screen8SpriteByte(SprGen,PT-SprGen+16);
+                            if (J)
+                            {
+                                    if(J&0x80) SPR_SET(8);
+                                    if(J&0x40) SPR_SET(9);
+                                    if(J&0x20) SPR_SET(10);
+                                    if(J&0x10) SPR_SET(11);
+                                    if(J&0x08) SPR_SET(12);
+                                    if(J&0x04) SPR_SET(13);
+                                    if(J&0x02) SPR_SET(14);
+                                    if(J&0x01) SPR_SET(15);
+                            }
+                        }
+                    }
+                }
+            }
+
+            OrThem>>=1;
+        }
+
+    for (int x = spriteMinX; x < spriteMaxX; x++)
+    {
+        if (x >= 0 && x < 256 && OccBuf[32 + x] == CurrentEpoch)
+            ZBuf[32 + x] = Screen8SpriteByteLUT[ZBuf[32 + x]];
     }
 
 #undef SPR_SET
@@ -1454,7 +1724,7 @@ ITCM_CODE void RefreshLine5(u8 uY)
 /** RefreshLine6() ******************************************/
 /** Refresh VDP9938 Screen 6: 512x192, 4 colors bitmap     **/
 /************************************************************/
-ITCM_CODE void RefreshLine6(u8 uY)
+void RefreshLine6(u8 uY)
 {
     DEBUG_REFRESH(6);
 
@@ -1474,7 +1744,7 @@ ITCM_CODE void RefreshLine6(u8 uY)
         // --------------------------------------------------------------------
         // For Screen 6, we are only rendering the even (A) pixels.
         // This decimation is okay as almost nothing uses Screen 6 except
-        //the main MSX logo screen which looks fine drawing every other pixel.
+        // the main MSX logo screen which looks fine drawing every other pixel.
         // We might alpha-blend someday... but that day is not today.
         // --------------------------------------------------------------------
         for (int i = 0; i < 128; i += 2)
@@ -1840,10 +2110,10 @@ ITCM_CODE void RefreshLine7(u8 uY)
 }
 
 
-/** RefreshLine8() ********************************************/
-/** Refresh VDP9938 Screen 8: 256x192, 256 colors bitmap   **/
+/** RefreshLine8() *******************************************/
+/** Refresh VDP9938 Screen 8: 256x192, 256 colors bitmap    **/
 /*************************************************************/
-void RefreshLine8(u8 uY)
+ITCM_CODE void RefreshLine8(u8 uY)
 {
     DEBUG_REFRESH(8);
 
@@ -1854,49 +2124,49 @@ void RefreshLine8(u8 uY)
     }
     else
     {
-        uint8_t *P = RefreshBorder(uY);
-        uint8_t *S = (uint8_t *) ChrTab+(((int)(uY+VScroll)<<8)&ChrTabM&0xFFFF);
-        if (FlipEvenOdd && OddPage && VDP_Memory<=S-0x10000) S-=0x10000;
+        u8 HasSprites = DoesScreen8LineHaveSprites(uY); // Sprite rendering on Screen 8 is expensive...
+        if (HAdjust) HasSprites = 1;                    // Any horizontal adjust and we must do the expensive processing
         
-        Screen8_rendered = 1;
+        uint8_t *P; 
+        if (!HasSprites) P = (u8 *)(XBuf + ((u16)uY << 8));
+        else P = RefreshBorder(uY);
 
-        memcpy(P, S, 256); // Blast all 256-pixels across into our destination buffer
+        u32 sourceAddress = (u32)(ChrTab - VDP_Memory) + (((u32)(uY + VScroll) << 8) & ChrTabM & 0xFFFF);
+        if (FlipEvenOdd && OddPage && sourceAddress >= 0x10000)
+            sourceAddress -= 0x10000;
+        sourceAddress &= 0x1FFFF;
+        
+        u32 bankOffset = (sourceAddress >> 1) & 0xFFFF;
 
-        ColorSprites(uY, P - 32);
+        const u32 *restrict e32 = (const u32 *)(VDP_Memory + bankOffset);
+        const u32 *restrict o32 = (const u32 *)(VDP_Memory + 0x10000 + bankOffset);
+        u32 *restrict out = (u32 *)P;
 
-        if (Screen8LineHasSprites)
+        for (u32 i = 0; i < 32; i++)
         {
-            u8 epoch = CurrentEpochSaved;
-            u8 *occ = OccBuf + 32;
-            u8 *pixels = P;
-            u32 *out = (u32 *)pixels;
+            u32 e = e32[i];                 // e0 e1 e2 e3
+            u32 o = o32[i];                 // o0 o1 o2 o3
 
-            for (int x = 0; x < 256; x += 4)
-            {
-                u32 b0 = pixels[x];
-                u32 b1 = pixels[x + 1];
-                u32 b2 = pixels[x + 2];
-                u32 b3 = pixels[x + 3];
+            u32 A = (e & 0x00FF00FF) | ((o & 0x00FF00FF) << 8);   // e0 o0 e2 o2
+            u32 B = ((e >> 8) & 0x00FF00FF) | (o & 0xFF00FF00);   // e1 o1 e3 o3
 
-                if (occ[x] == epoch)
-                    b0 = Screen8SpriteByteLUT[b0];
-
-                if (occ[x + 1] == epoch)
-                    b1 = Screen8SpriteByteLUT[b1];
-
-                if (occ[x + 2] == epoch)
-                    b2 = Screen8SpriteByteLUT[b2];
-
-                if (occ[x + 3] == epoch)
-                    b3 = Screen8SpriteByteLUT[b3];
-
-                out[x >> 2] = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
-            }
+            out[2*i]   = (A & 0xFFFF) | (B << 16);                // e0 o0 e1 o1
+            out[2*i+1] = (A >> 16)    | (B & 0xFFFF0000);         // e2 o2 e3 o3
         }
 
-        u32 * restrict dst = (u32 *)(XBuf + ((u16)uY << 8));
-        const u8 * restrict src = (const u8 *)(LineScratch + LS_BASE);
-        memcpy(dst, src, 256);
+        // ---------------------------------------------------------------------------------
+        // Even games that are heavy with sprite use don't have sprites on every line.
+        // To speed up this render, if there are no sprites on the line, we have rendered
+        // the background directly into the output XBuf[] and don't need to process here.
+        // ---------------------------------------------------------------------------------
+        if (HasSprites)
+        {
+            ColorSpritesScreen8(uY, P - 32);
+            
+            u32 * restrict dst = (u32 *)(XBuf + ((u16)uY << 8));
+            const u8 * restrict src = (const u8 *)(LineScratch + LS_BASE);
+            memcpy(dst, src, 256);
+        }
     }
 }
 
@@ -2280,7 +2550,10 @@ ITCM_CODE void Write9938(u8 iReg, u8 value)
       SprTab=VDP_Memory+(((int)(VDP[5]&SCR[ScrMode].R5)<<7)) + ((int)VDP[11]<<15);
       break;
 
-    case 14: VPAGE=VDP_Memory+((int)VDP[14]<<14); break;
+        case 14:
+            VPAGE=VDP_Memory+((int)VDP[14]<<14);
+            VPAGE8=VDP_Memory+((int)VDP[14]<<13);
+            break;
 
     case 44: VDPWrite(value); break;
     case 46: VDPDraw(value);break;
@@ -2299,13 +2572,15 @@ ITCM_CODE void Write9938(u8 iReg, u8 value)
 ITCM_CODE byte RdData9938(void)
 {
   byte data = VDPDlatch;
-  VDPDlatch = VPAGE[VAddr];
+ 
+  VDPDlatch = (ScrMode == 8)  ? *VDP9938Screen8DataPointer() : VPAGE[VAddr];
   VAddr = (VAddr+1)&0x3FFF;
 
   if(!VAddr&&(ScrMode>3))
   {
     VDP[14]=(VDP[14]+1)&7;
     VPAGE=VDP_Memory+((int)VDP[14]<<14);
+    VPAGE8=VDP_Memory+((int)VDP[14]<<13);
   }
 
   VDPCtrlLatch = 0;
@@ -2361,12 +2636,13 @@ ITCM_CODE void WrCtrl9938(byte value)
         /* When set for reading (Bit 6 is 0, i.e., case 0x00), perform first read */
         if (!(value & 0x40))
         {
-            VDPDlatch = VPAGE[VAddr];
+            VDPDlatch = (ScrMode == 8) ? *VDP9938Screen8DataPointer() : VPAGE[VAddr];
             VAddr = (VAddr + 1) & 0x3FFF;
             if (!VAddr && (ScrMode > 3))
             {
                 VDP[14] = (VDP[14] + 1) & 7;
                 VPAGE = VDP_Memory + ((int)VDP[14] << 14);
+                VPAGE8 = VDP_Memory + ((int)VDP[14] << 13);
             }
         }
     }
@@ -2644,6 +2920,7 @@ void Reset9938(void)
     ChrTab=ColTab=ChrGen=VDP_Memory;        // Character Table/Generator pointing to start of Video Memory
     SprTab=SprGen=VDP_Memory;               // Sprite Table/Generator pointing to start of Video Memory
     VPAGE=VDP_Memory;                       // VPAGE starts off pointing to start of Video Memory
+    VPAGE8=VDP_Memory;
     frame_number = 0;                       // Zero frame counter
     drawn_frame_number = 0;                 // Zero frame counter
     msx_irq_pending = 0;                    // No IRQs pending
