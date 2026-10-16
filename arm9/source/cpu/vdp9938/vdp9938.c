@@ -22,9 +22,9 @@
 //#define DEBUG_REFRESH(x) debug[x]++;
 #define DEBUG_REFRESH(x)
 
-volatile u8 bufferZone1[32] = {0};  // In case we ever index out of bounds (we removed some safety checks to speed it up)
-u8 XBuf[256*212] ALIGN(32) = {0};   // VDP9938 screen is 256x212
-volatile u8 bufferZone2[32] = {0};  // In case we ever index out of bounds (we removed some safety checks to speed it up)
+volatile u8 bufferZone1[32] = {0};      // In case we ever index out of bounds (we removed some safety checks to speed it up)
+u8 XBuf[2][256*212] ALIGN(32) = {0};    // VDP9938 screen is 256x212. We double-buffer the output.
+volatile u8 bufferZone2[32] = {0};      // In case we ever index out of bounds (we removed some safety checks to speed it up)
 
 u8 XPal[256]                __attribute__((section(".dtcm"))) = {0};
 u8 XPalReal0                __attribute__((section(".dtcm"))) = 0;   // the genuinely-programmed color for slot 0, independent of TP substitution
@@ -175,7 +175,7 @@ void BuildLutTablehh(void)
 
 // ----------------------------------------------------------------------
 // When an IRQ fires, we call this so we can manage the two independent
-// possible interrupt requests. One is for the VSync at the end of a 
+// possible interrupt requests. One is for the VSync at the end of a
 // frame and the other is the VDP Line Interrupt.
 // ----------------------------------------------------------------------
 void SetVDPIRQ(u8 bit, u8 set)
@@ -428,7 +428,7 @@ ITCM_CODE int ScanSprites(byte Y, unsigned int *Mask)
 
 /** RefreshSprites() ***************************************/
 /** VScroll changes the logical sprite scanline, but the  **/
-/** result is still drawn into physical XBuf row Y.       **/
+/** result is still drawn into physical XBuf[drawn_frame_number&1] row Y.       **/
 /***********************************************************/
 void RefreshSprites(register byte Y)
 {
@@ -441,7 +441,7 @@ void RefreshSprites(register byte Y)
    * R23/VScroll moves the logical scanline through the
    * sprite coordinate system.
    *
-   * Keep Y as the physical XBuf destination row.
+   * Keep Y as the physical XBuf[drawn_frame_number&1] destination row.
    */
   register byte spriteY = Y + VScroll;
 
@@ -450,7 +450,7 @@ void RefreshSprites(register byte Y)
   if((N<0) || !M) return;
 
   /* Still draw into the actual physical output row */
-  T = XBuf + 256*Y;
+  T = XBuf[drawn_frame_number&1] + 256*Y;
   AT = SprTab+(N<<2);
 
   /* For each possibly shown sprite... */
@@ -641,13 +641,13 @@ ITCM_CODE void ColorSprites(uint8_t Y, u8 *ZBuf)
       if((C&0x0F) || zeroNotTransparent)
       {
         PT = SprGen+((int)(IH>8? AT[2]&0xFC:AT[2])<<3)+J;
-        
+
         int spriteX = AT[1];
-        
+
         // Align sprites to the background's 2-pixel scroll quantization.
         // Prevents 1-pixel sprite jitter in Manbow 2 during horizontal scrolling.
         if ((HAdjust & 1)) spriteX = (spriteX+1) & ~1;
-            
+
         P=ZBuf+spriteX+(C&0x80? 0:32);
         O=OccBuf+spriteX+(C&0x80? 0:32);
         C&=0x0F;
@@ -1153,7 +1153,7 @@ void RefreshLine0(u8 Y)
 
   DEBUG_REFRESH(0);
 
-  P=XBuf+(Y<<8);
+  P=XBuf[drawn_frame_number&1]+(Y<<8);
   BC = XPal[BGColor];
   FC = XPal[FGColor];
 
@@ -1214,7 +1214,7 @@ void RefreshLine1(u8 uY)
 
   DEBUG_REFRESH(1);
 
-  P=(u32*) (XBuf+(uY<<8));
+  P=(u32*) (XBuf[drawn_frame_number&1]+(uY<<8));
   u32 ptLow = 0;
   u32 ptHigh = 0;
 
@@ -1286,11 +1286,11 @@ ITCM_CODE void RefreshLine2(u8 uY)
   if ((dstY < 0) || (dstY >= 192))
     return;
 
-  P=(u32*)(XBuf+(dstY<<8));
+  P=(u32*)(XBuf[drawn_frame_number&1]+(dstY<<8));
 
   if (!ScreenON)
   {
-    memset(XBuf + (dstY<<8), XPal[BGColor], 256);
+    memset(XBuf[drawn_frame_number&1] + (dstY<<8), XPal[BGColor], 256);
   }
   else
   {
@@ -1364,11 +1364,11 @@ void RefreshLine3(u8 uY)
 
   DEBUG_REFRESH(3);
 
-  P=XBuf+(uY<<8);
+  P=XBuf[drawn_frame_number&1]+(uY<<8);
 
   if (!ScreenON)
   {
-    memset(XBuf + (uY<<8), XPal[BGColor], 256);
+    memset(XBuf[drawn_frame_number&1] + (uY<<8), XPal[BGColor], 256);
   }
   else
   {
@@ -1428,9 +1428,9 @@ ITCM_CODE uint8_t *RefreshBorder(uint8_t Y)
 
 ITCM_CODE void CommitLine(u8 Y)
 {
-    // Always exactly 256 bytes, always 4-aligned on both ends (XBuf rows and
+    // Always exactly 256 bytes, always 4-aligned on both ends (XBuf[drawn_frame_number&1] rows and
     // LineScratch+LS_BASE are both multiples of 4) -- no shift math here at all.
-    u32 * restrict dst = (u32*)(XBuf + ((u16)Y << 8));
+    u32 * restrict dst = (u32*)(XBuf[drawn_frame_number&1] + ((u16)Y << 8));
     const u8 * restrict src = (const u8*)(LineScratch + LS_BASE);
 
     for (int i=0; i<8;i++)
@@ -1453,8 +1453,7 @@ ITCM_CODE void RefreshLine4(uint8_t Y)
 
     if (!ScreenON)
     {
-        memset(XBuf + (Y<<8), XPal[BGColor], 256);
-        DC_FlushRange(XBuf + (Y<<8), 256);
+        memset(XBuf[drawn_frame_number&1] + (Y<<8), XPal[BGColor], 256);
     }
     else
     {
@@ -1628,8 +1627,7 @@ ITCM_CODE void RefreshLine5(u8 uY)
 
     if (!ScreenON)
     {
-      memset(XBuf + (uY<<8), XPal[BGColor], 256);
-      DC_FlushRange(XBuf + (uY<<8), 256);
+      memset(XBuf[drawn_frame_number&1] + (uY<<8), XPal[BGColor], 256);
     }
     else
     {
@@ -1724,14 +1722,13 @@ ITCM_CODE void RefreshLine5(u8 uY)
 /** RefreshLine6() ******************************************/
 /** Refresh VDP9938 Screen 6: 512x192, 4 colors bitmap     **/
 /************************************************************/
-void RefreshLine6(u8 uY)
+ITCM_CODE void RefreshLine6(u8 uY)
 {
     DEBUG_REFRESH(6);
 
     if (!ScreenON)
     {
-        memset(XBuf + (uY<<8), XPal[BGColor], 256);
-        DC_FlushRange(XBuf + (uY<<8), 256);
+        memset(XBuf[drawn_frame_number&1] + (uY<<8), XPal[BGColor], 256);
     }
     else
     {
@@ -2035,7 +2032,7 @@ void RefreshLine7_Zoomed(u8 uY)
 
     if (!ScreenON)
     {
-        memset(XBuf + (uY << 8), XPal[BGColor], 256);
+        memset(XBuf[drawn_frame_number&1] + (uY << 8), XPal[BGColor], 256);
     }
     else
     {
@@ -2076,8 +2073,7 @@ ITCM_CODE void RefreshLine7(u8 uY)
 
     if (!ScreenON)
     {
-       memset(XBuf + (uY<<8), XPal[BGColor], 256);
-       DC_FlushRange(XBuf + (uY<<8), 256);
+       memset(XBuf[drawn_frame_number&1] + (uY<<8), XPal[BGColor], 256);
     }
     else
     {
@@ -2119,23 +2115,22 @@ ITCM_CODE void RefreshLine8(u8 uY)
 
     if (!ScreenON)
     {
-      memset(XBuf + (uY<<8), XPal[BGColor], 256);
-      DC_FlushRange(XBuf + (uY<<8), 256);
+      memset(XBuf[drawn_frame_number&1] + (uY<<8), XPal[BGColor], 256);
     }
     else
     {
         u8 HasSprites = DoesScreen8LineHaveSprites(uY); // Sprite rendering on Screen 8 is expensive...
         if (HAdjust) HasSprites = 1;                    // Any horizontal adjust and we must do the expensive processing
-        
-        uint8_t *P; 
-        if (!HasSprites) P = (u8 *)(XBuf + ((u16)uY << 8));
+
+        uint8_t *P;
+        if (!HasSprites) P = (u8 *)(XBuf[drawn_frame_number&1] + ((u16)uY << 8));
         else P = RefreshBorder(uY);
 
         u32 sourceAddress = (u32)(ChrTab - VDP_Memory) + (((u32)(uY + VScroll) << 8) & ChrTabM & 0xFFFF);
         if (FlipEvenOdd && OddPage && sourceAddress >= 0x10000)
             sourceAddress -= 0x10000;
         sourceAddress &= 0x1FFFF;
-        
+
         u32 bankOffset = (sourceAddress >> 1) & 0xFFFF;
 
         const u32 *restrict e32 = (const u32 *)(VDP_Memory + bankOffset);
@@ -2157,13 +2152,13 @@ ITCM_CODE void RefreshLine8(u8 uY)
         // ---------------------------------------------------------------------------------
         // Even games that are heavy with sprite use don't have sprites on every line.
         // To speed up this render, if there are no sprites on the line, we have rendered
-        // the background directly into the output XBuf[] and don't need to process here.
+        // the background directly into the output XBuf[drawn_frame_number&1][] and don't need to process here.
         // ---------------------------------------------------------------------------------
         if (HasSprites)
         {
             ColorSpritesScreen8(uY, P - 32);
-            
-            u32 * restrict dst = (u32 *)(XBuf + ((u16)uY << 8));
+
+            u32 * restrict dst = (u32 *)(XBuf[drawn_frame_number&1] + ((u16)uY << 8));
             const u8 * restrict src = (const u8 *)(LineScratch + LS_BASE);
             memcpy(dst, src, 256);
         }
@@ -2177,7 +2172,7 @@ ITCM_CODE void RefreshLine8(u8 uY)
 /*************************************************************/
 void RefreshLine80_Zoomed(u8 Y)
 {
-    u8 *P = XBuf + (Y << 8);
+    u8 *P = XBuf[drawn_frame_number&1] + (Y << 8);
     const u8 BC = XPal[BGColor];
     const u8 FC = XPal[FGColor];
 
@@ -2223,13 +2218,13 @@ void RefreshLine80_Zoomed(u8 Y)
 
     if (charX >= 80)
     {
-        memset(P, BC, 256 - (P - (XBuf + (Y << 8))));
+        memset(P, BC, 256 - (P - (XBuf[drawn_frame_number&1] + (Y << 8))));
         return;
     }
 
     u8 K = ChrGen[((int)T[charX] << 3) + Offset];
 
-    int remaining = 256 - (int)(P - (XBuf + (Y << 8)));
+    int remaining = 256 - (int)(P - (XBuf[drawn_frame_number&1] + (Y << 8)));
 
     /*
      * Render pixels sequentially, but write four pixels at
@@ -2339,7 +2334,7 @@ void RefreshLine80(u8 Y)
     if (zoom_screen == 2)
         return RefreshLine80_Zoomed(Y);
 
-    P = XBuf + (Y << 8);
+    P = XBuf[drawn_frame_number&1] + (Y << 8);
     BC = XPal[BGColor];
     FC = XPal[FGColor];
 
@@ -2550,10 +2545,10 @@ ITCM_CODE void Write9938(u8 iReg, u8 value)
       SprTab=VDP_Memory+(((int)(VDP[5]&SCR[ScrMode].R5)<<7)) + ((int)VDP[11]<<15);
       break;
 
-        case 14:
-            VPAGE=VDP_Memory+((int)VDP[14]<<14);
-            VPAGE8=VDP_Memory+((int)VDP[14]<<13);
-            break;
+    case 14:
+        VPAGE=VDP_Memory+((int)VDP[14]<<14);
+        VPAGE8=VDP_Memory+((int)VDP[14]<<13);
+        break;
 
     case 44: VDPWrite(value); break;
     case 46: VDPDraw(value);break;
@@ -2572,7 +2567,7 @@ ITCM_CODE void Write9938(u8 iReg, u8 value)
 ITCM_CODE byte RdData9938(void)
 {
   byte data = VDPDlatch;
- 
+
   VDPDlatch = (ScrMode == 8)  ? *VDP9938Screen8DataPointer() : VPAGE[VAddr];
   VAddr = (VAddr+1)&0x3FFF;
 
@@ -2817,7 +2812,7 @@ ITCM_CODE void Loop9938(void)
       {
           if(!(VDPStatus[0]&VDP9938_STAT_OVRLAP)) // If not already in collision...
           {
-            if(CheckSprites()) VDPStatus[0]|=VDP9938_STAT_OVRLAP; // Set the collision bit
+            if(CheckSprites()) VDPStatus[0] |= VDP9938_STAT_OVRLAP; // Set the collision bit
           }
       }
   }

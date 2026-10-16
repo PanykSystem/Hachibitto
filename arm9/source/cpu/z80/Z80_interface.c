@@ -67,37 +67,32 @@ ITCM_CODE u8 cpu_readmem16(u16 address)
 }
 
 
-// -----------------------------------------------------------------------
-// Zemina 8K mapper:
-// Page (8kB)    Switching address   Initial segment
-// 4000h~5FFFh (mirror: C000h~DFFFh) 4000h (mirrors: 4001h~5FFFh)    0
-// 6000h~7FFFh (mirror: E000h~FFFFh) 6000h (mirrors: 6001h~7FFFh)    1
-// 8000h~9FFFh (mirror: 0000h~1FFFh) 8000h (mirrors: 8001h~9FFFh)    2
-// A000h~BFFFh (mirror: 2000h~3FFFh) A000h (mirrors: A001h~BFFFh)    3
-// -----------------------------------------------------------------------
-void __attribute__((noinline)) HandleZemina8K(u32* src, u8 block, u16 address)
+// ---------------------------------------------------------------------------------
+// The Konami 8K Mapper without SCC:
+// 4000h-5FFFh - fixed ROM area (not swappable)
+// 6000h~7FFFh (mirror: E000h~FFFFh)    6000h (mirrors: 6001h~7FFFh)    1
+// 8000h~9FFFh (mirror: 0000h~1FFFh)    8000h (mirrors: 8001h~9FFFh)    Random
+// A000h~BFFFh (mirror: 2000h~3FFFh)    A000h (mirrors: A001h~BFFFh)    Random
+// ---------------------------------------------------------------------------------
+void __attribute__((noinline)) HandleKonami8(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
-
-    if ((address >= 0x4000) && (address < 0x6000))
-    {
-        MSXCartPtr[media_id][2] = (u8*)src;  // Main ROM
-        MSXCartPtr[media_id][6] = (u8*)src;  // Mirror
-        MemoryMap[2] = (u8 *)(MSXCartPtr[media_id][2]) - 0x4000;
-    }
-    else if ((address >= 0x6000) && (address < 0x8000))
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
+    
+    if ((address & 0xE000) == 0x6000)
     {
         MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
         MSXCartPtr[media_id][7] = (u8*)src;  // Mirror
         MemoryMap[3] = (u8 *)(MSXCartPtr[media_id][3]) - 0x6000;
     }
-    else if ((address >= 0x8000) && (address < 0xA000))
+    else if ((address & 0xE000) == 0x8000)
     {
         MSXCartPtr[media_id][4] = (u8*)src;  // Main ROM
         MSXCartPtr[media_id][0] = (u8*)src;  // Mirror
         MemoryMap[4] = (u8 *)(MSXCartPtr[media_id][4]) - 0x8000;
     }
-    else if ((address >= 0xA000) && (address < 0xC000))
+    else if ((address & 0xE000) == 0xA000)
     {
         MSXCartPtr[media_id][5] = (u8*)src;  // Main ROM
         MSXCartPtr[media_id][1] = (u8*)src;  // Mirror
@@ -106,57 +101,77 @@ void __attribute__((noinline)) HandleZemina8K(u32* src, u8 block, u16 address)
 }
 
 // -------------------------------------------------------------------------
-// The ZENMIA 16K Mapper:
-// 4000h~7FFFh  via writes to 4000h-7FFF
-// 8000h~BFFFh  via writes to 8000h-BFFF
+// The ASCII 8K Mapper:
+// 4000h~5FFFh (mirror: C000h~DFFFh)    6000h (mirrors: 6001h~67FFh)    0
+// 6000h~7FFFh (mirror: E000h~FFFFh)    6800h (mirrors: 6801h~68FFh)    0
+// 8000h~9FFFh (mirror: 0000h~1FFFh)    7000h (mirrors: 7001h~77FFh)    0
+// A000h~BFFFh (mirror: 2000h~3FFFh)    7800h (mirrors: 7801h~7FFFh)    0
 // -------------------------------------------------------------------------
-void __attribute__((noinline)) HandleZemina16K(u32* src, u8 block, u16 address)
+void __attribute__((noinline)) HandleAscii8(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
-    if (bCartInPage[1] && (address >= 0x4000) && (address < 0x8000))
+    if ((address & 0xF800) == 0x6000)
     {
-        MSXCartPtr[media_id][2] = (u8*)src;
-        MSXCartPtr[media_id][3] = (u8*)src+0x2000;
-        MemoryMap[2] = (u8 *)(MSXCartPtr[media_id][2]) - 0x4000;
-        MemoryMap[3] = (u8 *)(MSXCartPtr[media_id][3]) - 0x6000;
-        // Mirrors
-        MSXCartPtr[media_id][6] = (u8*)src;
-        MSXCartPtr[media_id][7] = (u8*)src+0x2000;
+        MSXCartPtr[media_id][2] = (u8*)src;  // Main ROM
+        MSXCartPtr[media_id][6] = (u8*)src;  // Mirror
+        MemoryMap[2] = MSXCartPtr[media_id][2] - 0x4000;
         if (bCartInPage[3] == (media_id+1))
         {
-            MemoryMap[6] = (u8 *)(MSXCartPtr[media_id][6]) - 0xC000;
-            MemoryMap[7] = (u8 *)(MSXCartPtr[media_id][7]) - 0xE000;
+            MemoryMap[6] = MSXCartPtr[media_id][6] - 0xC000;
         }
     }
-    else if (bCartInPage[1] && (address >= 0x8000) && (address < 0xC000))
+    else if ((address & 0xF800) == 0x6800)
     {
-        MSXCartPtr[media_id][4] = (u8*)src;
-        MSXCartPtr[media_id][5] = (u8*)src+0x2000;
-        // Mirrors
-        MSXCartPtr[media_id][0] = (u8*)src;
-        MSXCartPtr[media_id][1] = (u8*)src+0x2000;
+        MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
+        MSXCartPtr[media_id][7] = (u8*)src;  // Mirror
+        MemoryMap[3] = MSXCartPtr[media_id][3] - 0x6000;
+        if (bCartInPage[3] == (media_id+1))
+        {
+            MemoryMap[7] = MSXCartPtr[media_id][7] - 0xE000;
+        }
+    }
+    else if ((address & 0xF800) == 0x7000)
+    {
+        MSXCartPtr[media_id][4] = (u8*)src;  // Main ROM
+        MSXCartPtr[media_id][0] = (u8*)src;  // Mirror
         if (bCartInPage[2] == (media_id+1))
         {
-            MemoryMap[4] = (u8 *)(MSXCartPtr[media_id][4]) - 0x8000;
-            MemoryMap[5] = (u8 *)(MSXCartPtr[media_id][5]) - 0xA000;
+            MemoryMap[4] = MSXCartPtr[media_id][4] - 0x8000;
         }
-        if (bCartInPage[0])
+        if (bCartInPage[0] == (media_id+1))
         {
-            MemoryMap[0] = (u8 *)(MSXCartPtr[media_id][0]) - 0x0000;
-            MemoryMap[1] = (u8 *)(MSXCartPtr[media_id][1]) - 0x2000;
+            MemoryMap[0] = MSXCartPtr[media_id][0] - 0x0000;
+        }
+    }
+    else if ((address & 0xF800) == 0x7800)
+    {
+        MSXCartPtr[media_id][5] = (u8*)src;  // Main ROM
+        MSXCartPtr[media_id][1] = (u8*)src;  // Mirror
+        if (bCartInPage[2] == (media_id+1))
+        {
+            MemoryMap[5] = MSXCartPtr[media_id][5] - 0xA000;
+        }
+        if (bCartInPage[0] == (media_id+1))
+        {
+            MemoryMap[1] = MSXCartPtr[media_id][1] - 0x2000;
         }
     }
 }
+
 
 // -------------------------------------------------------------------------
 // The ASCII 16K Mapper:
 // 4000h~7FFFh  via writes to 6000h to 67FFh
 // 8000h~BFFFh  via writes to 7000h to 77FFh
 // -------------------------------------------------------------------------
-void __attribute__((noinline)) HandleAscii16(u32* src, u8 block, u16 address)
+void __attribute__((noinline)) HandleAscii16(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if ((address & 0xF800) == 0x6000)
     {
@@ -179,9 +194,11 @@ void __attribute__((noinline)) HandleAscii16(u32* src, u8 block, u16 address)
 
 #define SRAM_ENABLE_BIT     (MyMedia[media_id].mapperMask+1)      // SRAM Enable is the bit right after the rom selection bits...
 
-void __attribute__((noinline)) HandleAscii8_SRAM2(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleAscii8_SRAM2(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if ((address & 0xF800) == 0x6000)
     {
@@ -270,9 +287,11 @@ void __attribute__((noinline)) HandleAscii8_SRAM2(u32* src, u8 block, u16 addres
 }
 
 
-void __attribute__((noinline)) HandleAscii8_SRAM8(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleAscii8_SRAM8(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if ((address & 0xF800) == 0x6000)
     {
@@ -374,9 +393,11 @@ void __attribute__((noinline)) HandleAscii8_SRAM8(u32* src, u8 block, u16 addres
 // ----------------------------------------------
 // ASCII 16K with 2K of SRAM (Hydlide II, etc).
 // ----------------------------------------------
-void __attribute__((noinline)) HandleAscii16_SRAM2(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleAscii16_SRAM2(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if ((address & 0xF800) == 0x6000)
     {
@@ -430,9 +451,11 @@ void __attribute__((noinline)) HandleAscii16_SRAM2(u32* src, u8 block, u16 addre
 // ------------------------------------------------------------
 // ASCII 16K with 8K of SRAM (A-Train is the only known game).
 // ------------------------------------------------------------
-void __attribute__((noinline)) HandleAscii16_SRAM8(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleAscii16_SRAM8(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if ((address & 0xF800) == 0x6000)
     {
@@ -479,9 +502,11 @@ void __attribute__((noinline)) HandleAscii16_SRAM8(u32* src, u8 block, u16 addre
     }
 }
 
-void __attribute__((noinline)) HandleKoei_SRAM32K(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleKoei_SRAM32K(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if ((address & 0xF800) == 0x6000)
     {
@@ -577,69 +602,12 @@ void __attribute__((noinline)) HandleKoei_SRAM32K(u32* src, u8 block, u16 addres
     }
 }
 
-// -------------------------------------------------------------------------
-// The ASCII 8K Mapper:
-// 4000h~5FFFh (mirror: C000h~DFFFh)    6000h (mirrors: 6001h~67FFh)    0
-// 6000h~7FFFh (mirror: E000h~FFFFh)    6800h (mirrors: 6801h~68FFh)    0
-// 8000h~9FFFh (mirror: 0000h~1FFFh)    7000h (mirrors: 7001h~77FFh)    0
-// A000h~BFFFh (mirror: 2000h~3FFFh)    7800h (mirrors: 7801h~7FFFh)    0
-// -------------------------------------------------------------------------
-void __attribute__((noinline)) HandleAscii8(u32* src, u8 block, u16 address, u8 value)
-{
-    u8 media_id = bCartInPage[address>>14] - 1;
-    
-    if ((address & 0xF800) == 0x6000)
-    {
-        MSXCartPtr[media_id][2] = (u8*)src;  // Main ROM
-        MSXCartPtr[media_id][6] = (u8*)src;  // Mirror
-        MemoryMap[2] = MSXCartPtr[media_id][2] - 0x4000;
-        if (bCartInPage[3] == (media_id+1))
-        {
-            MemoryMap[6] = MSXCartPtr[media_id][6] - 0xC000;
-        }
-    }
-    else if ((address & 0xF800) == 0x6800)
-    {
-        MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
-        MSXCartPtr[media_id][7] = (u8*)src;  // Mirror
-        MemoryMap[3] = MSXCartPtr[media_id][3] - 0x6000;
-        if (bCartInPage[3] == (media_id+1))
-        {
-            MemoryMap[7] = MSXCartPtr[media_id][7] - 0xE000;
-        }
-    }
-    else if ((address & 0xF800) == 0x7000)
-    {
-        MSXCartPtr[media_id][4] = (u8*)src;  // Main ROM
-        MSXCartPtr[media_id][0] = (u8*)src;  // Mirror
-        if (bCartInPage[2] == (media_id+1))
-        {
-            MemoryMap[4] = MSXCartPtr[media_id][4] - 0x8000;
-        }
-        if (bCartInPage[0] == (media_id+1))
-        {
-            MemoryMap[0] = MSXCartPtr[media_id][0] - 0x0000;
-        }
-    }
-    else if ((address & 0xF800) == 0x7800)
-    {
-        MSXCartPtr[media_id][5] = (u8*)src;  // Main ROM
-        MSXCartPtr[media_id][1] = (u8*)src;  // Mirror
-        if (bCartInPage[2] == (media_id+1))
-        {
-            MemoryMap[5] = MSXCartPtr[media_id][5] - 0xA000;
-        }
-        if (bCartInPage[0] == (media_id+1))
-        {
-            MemoryMap[1] = MSXCartPtr[media_id][1] - 0x2000;
-        }
-    }
-}
-
             
-void __attribute__((noinline)) HandleKonamiSCC8(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleKonamiSCC8(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     // -----------------------------------------------------------------------------------
     // Are we writing to the SCC chip memory mapped area and are the registers "in view"?
@@ -726,7 +694,7 @@ void __attribute__((noinline)) HandleKonamiSCC8(u32* src, u8 block, u16 address,
 // This is a memory-mapper expansion (handled in msx.c) to bring total system memory
 // up to 512K (DS-Lite) or 1MB (DSi/XL/LL) but also contains a standard SCC cart.
 // -----------------------------------------------------------------------------------
-void __attribute__((noinline)) HandleMegaSCC(u16 address, u8 value)
+void __attribute__((noinline)) HandleMegaSCC(u8 media_id, u16 address, u8 value)
 {
     // -----------------------------------------------------------------------------------
     // Are we writing to the SCC chip memory mapped area and are the registers "in view"?
@@ -774,11 +742,13 @@ void __attribute__((noinline)) HandleMegaSCC(u16 address, u8 value)
 // 6 = waiting for sector erase command (30)
 static u8 sccFlashCommandState = 0;
 
-void __attribute__((noinline)) HandleSCCFlash(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleSCCFlash(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address >> 14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
-    u16 flash_cmd_addr = address & 0x0FFF;
+   u16 flash_cmd_addr = address & 0x0FFF;
 
     // Reset command.
     if (value == 0xF0 && flash_cmd_addr == 0x0555)
@@ -955,9 +925,11 @@ void __attribute__((noinline)) HandleSCCFlash(u32* src, u8 block, u16 address, u
 // ---------------------------------------------------------------------
 // Xevious and a few other related games have special cart mapping...
 // ---------------------------------------------------------------------
-void __attribute__((noinline))  HandleXevious(u32* src, u8 block, u16 address)
+void __attribute__((noinline))  HandleXevious(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if ((address >= 0x6000) && (address <= 0x67FF))
     {
@@ -982,9 +954,11 @@ void __attribute__((noinline))  HandleXevious(u32* src, u8 block, u16 address)
 // ---------------------------------------------------------------------------------------------
 // Same as Konami8 but with DAC at 0x4000 range. We don't handle that yet, but game is playable.
 // ---------------------------------------------------------------------------------------------
-void __attribute__((noinline))  HandleMajut(u32* src, u8 block, u16 address)
+void __attribute__((noinline))  HandleMajut(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if (bCartInPage[1] && ((address & 0xE000) == 0x6000))
     {
@@ -1009,9 +983,11 @@ void __attribute__((noinline))  HandleMajut(u32* src, u8 block, u16 address)
 // ---------------------------------------------------------------------
 // XBlam switches on hits to addres 0x4045 and swaps out 16K at 0x8000
 // ---------------------------------------------------------------------
-void __attribute__((noinline))  HandleXBlam(u32* src, u8 block, u16 address)
+void __attribute__((noinline))  HandleXBlam(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if (address == 0x4045)
     {
@@ -1025,9 +1001,11 @@ void __attribute__((noinline))  HandleXBlam(u32* src, u8 block, u16 address)
     }
 }
 
-void __attribute__((noinline)) HandleGeneric8k(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleGeneric8k(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     switch (address >> 13)
     {
@@ -1096,10 +1074,10 @@ void __attribute__((noinline)) HandleGeneric8k(u32* src, u8 block, u16 address, 
 u8 matra_previoius_blocks[4] = {0,0,0,0};
 u8 matra_compilation_offset = 2;
 
-void __attribute__((noinline)) HandleMatraCompilation(u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleMatraCompilation(u8 media_id, u16 address, u8 value)
 {
+    u32 block = (value & MyMedia[media_id].mapperMask);
     u8 offset_block = block;
-    u8 media_id = bCartInPage[address>>14] - 1;
 
     if (matra_compilation_offset >= 2) offset_block += (matra_compilation_offset-2);
     u32 msx_offset = offset_block * MyMedia[media_id].blockSize;
@@ -1158,9 +1136,11 @@ void __attribute__((noinline)) HandleMatraCompilation(u8 block, u16 address, u8 
     }
 }
 
-void __attribute__((noinline)) HandleGeneric16k(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleGeneric16k(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     switch (address >> 14)
     {
@@ -1203,9 +1183,11 @@ void __attribute__((noinline)) HandleGeneric16k(u32* src, u8 block, u16 address,
     }
 }
 
-void __attribute__((noinline)) HandleGameMaster2(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleGameMaster2(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if ((address & 0xE000) == 0x6000)  // Bank 2 (0x6000-0x7FFF)
     {
@@ -1288,9 +1270,11 @@ void __attribute__((noinline)) HandleSuperLodeRunner(u8 media_id, u8 value)
 // This is really the same as ASCII-8 with 8K of SRAM but it uses bit 7 for SRAM access
 // -------------------------------------------------------------------------------------
 #define SRAM_ENABLE_BIT_WIZARDRY    0x80
-void __attribute__((noinline)) HandleWizardry(u32* src, u8 block, u16 address, u8 value)
+void __attribute__((noinline)) HandleWizardry(u8 media_id, u16 address, u8 value)
 {
-    u8 media_id = bCartInPage[address>>14] - 1;
+    u32 block = (value & MyMedia[media_id].mapperMask);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
     if ((address & 0xF800) == 0x6000)
     {
@@ -1395,7 +1379,7 @@ void __attribute__((noinline)) HandleWizardry(u32* src, u8 block, u16 address, u
 // -------------------------------------------------------------------
 #define FMPAC_KEY1 0x4D
 #define FMPAC_KEY2 0x69
-void __attribute__((noinline)) HandleFMPAC(u16 address, u8 value)
+void __attribute__((noinline)) HandleFMPAC(u8 media_id, u16 address, u8 value)
 {
     if (address == 0x5FFE)
     {
@@ -1513,7 +1497,7 @@ void __attribute__((noinline)) HandleSCCPlusModeRegister(u8 value)
     // that window get interpreted, which cpu_writemem16 checks live below.
 }
 
-void __attribute__((noinline)) HandleSCCPlus(u16 address, u8 value)
+void __attribute__((noinline)) HandleSCCPlus(u8 media_id, u16 address, u8 value)
 {
     // Mode Register - always intercepted whenever the cart occupies 8000-BFFF
     if ((bCartInPage[2] == 2) && (address == 0xBFFE || address == 0xBFFF))
@@ -1568,6 +1552,35 @@ void __attribute__((noinline)) HandleDiskControl(u16 address, u8 value)
     if (address == 0x7FFD) fdc_setDrive((value & 1) ? 1:0); // Drive: [xxxxxxxD]
 }
 
+typedef void (*MapperWriteHandler)(u8 media_id, u16 address, u8 value);
+
+static MapperWriteHandler const mapperWriteHandlers[SCCPLUS_RAM + 1] __attribute__((section(".dtcm"))) =
+{
+    [KON8] = HandleKonami8,
+    [ASC8] = HandleAscii8,
+    [SCC8] = HandleKonamiSCC8,
+    [ASC16] = HandleAscii16,
+    [GENERIC_8K] = HandleGeneric8k,
+    [GENERIC_16K] = HandleGeneric16k,
+    [XBLAM] = HandleXBlam,
+    [XEVIOUS] = HandleXevious,
+    [ASC8SRAM8] = HandleAscii8_SRAM8,
+    [ASC8SRAM2] = HandleAscii8_SRAM2,
+    [ASC16SRAM2] = HandleAscii16_SRAM2,
+    [ASC16SRAM8] = HandleAscii16_SRAM8,
+    [GAME_MASTER2] = HandleGameMaster2,
+    [MAJUT] = HandleMajut,
+    [WIZARDRY] = HandleWizardry,
+    [KOEISRAM32] = HandleKoei_SRAM32K,
+    [MANBOW2] = HandleSCCFlash,
+    [HAMARAJANIGHT] = HandleSCCFlash,
+    [RBSC_FLASH] = HandleSCCFlash,
+    [MATRACOMP] = HandleMatraCompilation,
+    [MEGA_SCC] = HandleMegaSCC,
+    [FMPAC_SRAM] = HandleFMPAC,
+    [SCCPLUS_RAM] = HandleSCCPlus,
+};
+
 // ------------------------------------------------------------------
 // Write memory handles both normal writes and bankswitched since
 // write is much less common than reads... We handle the popular MSX
@@ -1601,124 +1614,15 @@ ITCM_CODE void cpu_writemem16(u16 address, u8 value)
     }
     else if (bCartInPage[address>>14]) // Is there a Cartridge mapped into the write address area?
     {
-        u8 media_id = bCartInPage[address>>14] - 1; // Indicates MEDIA_CART1 or MEDIA_CART2
+        u8 media_id = bCartInPage[address>>14] - 1; // Is this MEDIA_CART1 or MEDIA_CART2?
+        u8 mapper_type = MyMedia[media_id].mapperType;
 
-        // -------------------------------------------------------------
-        // Compute the block and offset of the new memory and we
-        // can map it into place... this is fast since we are just
-        // moving pointers around and not trying to copy memory blocks.
-        // -------------------------------------------------------------
-        u32 block = (value & MyMedia[media_id].mapperMask);
-        u32 msx_offset = block * MyMedia[media_id].blockSize;
-        u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
-
-        // ---------------------------------------------------------------------------------
-        // The Konami 8K Mapper without SCC:
-        // 4000h-5FFFh - fixed ROM area (not swappable)
-        // 6000h~7FFFh (mirror: E000h~FFFFh)    6000h (mirrors: 6001h~7FFFh)    1
-        // 8000h~9FFFh (mirror: 0000h~1FFFh)    8000h (mirrors: 8001h~9FFFh)    Random
-        // A000h~BFFFh (mirror: 2000h~3FFFh)    A000h (mirrors: A001h~BFFFh)    Random
-        // ---------------------------------------------------------------------------------
-        if (MyMedia[media_id].mapperType == KON8)
+        // -----------------------------------------------------------------------
+        // Each cartridge mapper is different - call into the appropriate handler.
+        // -----------------------------------------------------------------------
+        if (mapperWriteHandlers[mapper_type] != NULL)
         {
-            if ((address & 0xE000) == 0x6000)
-            {
-                MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
-                MSXCartPtr[media_id][7] = (u8*)src;  // Mirror
-                MemoryMap[3] = (u8 *)(MSXCartPtr[media_id][3]) - 0x6000;
-            }
-            else if ((address & 0xE000) == 0x8000)
-            {
-                MSXCartPtr[media_id][4] = (u8*)src;  // Main ROM
-                MSXCartPtr[media_id][0] = (u8*)src;  // Mirror
-                MemoryMap[4] = (u8 *)(MSXCartPtr[media_id][4]) - 0x8000;
-            }
-            else if ((address & 0xE000) == 0xA000)
-            {
-                MSXCartPtr[media_id][5] = (u8*)src;  // Main ROM
-                MSXCartPtr[media_id][1] = (u8*)src;  // Mirror
-                MemoryMap[5] = (u8 *)(MSXCartPtr[media_id][5]) - 0xA000;
-            }
-        }
-        else if (MyMedia[media_id].mapperType == ASC8)
-        {
-            HandleAscii8(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == SCC8)
-        {
-             HandleKonamiSCC8(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == ASC16)
-        {
-            HandleAscii16(src, block, address);
-        }
-        else if (MyMedia[media_id].mapperType == ASC8SRAM2)
-        {
-            HandleAscii8_SRAM2(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == ASC8SRAM8)
-        {
-            HandleAscii8_SRAM8(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == ASC16SRAM2)
-        {
-            HandleAscii16_SRAM2(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == ASC16SRAM8)
-        {
-            HandleAscii16_SRAM8(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == XEVIOUS)
-        {
-            HandleXevious(src, block, address);
-        }
-        else if ((MyMedia[media_id].mapperType == MANBOW2) || (MyMedia[media_id].mapperType == HAMARAJANIGHT) || (MyMedia[media_id].mapperType == RBSC_FLASH))
-        {
-            HandleSCCFlash(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == MAJUT)
-        {
-            HandleMajut(src, block, address);
-        }
-        else if (MyMedia[media_id].mapperType == XBLAM)
-        {
-            HandleXBlam(src, block, address);
-        }
-        else if (MyMedia[media_id].mapperType == GAME_MASTER2)
-        {
-            HandleGameMaster2(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == GENERIC_8K)
-        {
-            HandleGeneric8k(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == GENERIC_16K)
-        {
-            HandleGeneric16k(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == WIZARDRY)
-        {
-            HandleWizardry(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == KOEISRAM32)
-        {
-            HandleKoei_SRAM32K(src, block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == SCCPLUS_RAM)
-        {
-            HandleSCCPlus(address, value);
-        }
-        else if (MyMedia[media_id].mapperType == MATRACOMP)
-        {
-            HandleMatraCompilation(block, address, value);
-        }
-        else if (MyMedia[media_id].mapperType == FMPAC_SRAM)
-        {
-            HandleFMPAC(address, value);
-        }
-        else if (MyMedia[media_id].mapperType == MEGA_SCC)
-        {
-            HandleMegaSCC(address, value);
+            mapperWriteHandlers[mapper_type](media_id, address, value);
         }
     }
 }

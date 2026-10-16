@@ -64,7 +64,7 @@ typedef struct {
   byte R2,R3,R4,R5,M2,M3,M4,M5;
 } tScrMode;
 
-extern u8 XBuf[];
+extern u8 XBuf[2][256*212];
 extern u8 OH;
 extern u8 IH;
 extern u8 *VPAGE;

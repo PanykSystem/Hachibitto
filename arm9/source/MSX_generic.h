@@ -146,6 +146,7 @@ extern u8 mirror_ram_bank[4];
 
 extern u8 zanac_glitch_patch;
 
+// Mapper Types
 #define GUESS           0
 #define MIRRORED        1
 #define KON8            2
@@ -167,21 +168,22 @@ extern u8 zanac_glitch_patch;
 #define LIN64           18
 #define PAGE2           19
 #define ROM_NORMAL      20
-
-
-#define GAME_MASTER2    69  // Not one of the general mappers a user can pick
-#define MAJUT           70  // Not one of the general mappers a user can pick
-#define NAMCO           71  // Not one of the general mappers a user can pick
-#define WIZARDRY        72  // Not one of the general mappers a user can pick
-#define KOEISRAM32      73  // Not one of the general mappers a user can pick
-#define MANBOW2         74  // Not one of the general mappers a user can pick
-#define HAMARAJANIGHT   75  // Not one of the general mappers a user can pick
-#define RBSC_FLASH      76  // Not one of the general mappers a user can pick
-#define MATRACOMP       77  // Not one of the general mappers a user can pick
-
-#define MEGA_SCC        86  // For our special MEGARAM SCC 'Cart'
-#define FMPAC_SRAM      87  // For our special FM-PAC 'Cart'
-#define SCCPLUS_RAM     88  // For our special SCC+ 'Cart'
+#define RESERVED_1      21
+#define RESERVED_2      22
+#define RESERVED_3      23
+#define RESERVED_4      24
+#define GAME_MASTER2    25  // Not one of the general mappers a user can pick
+#define MAJUT           26  // Not one of the general mappers a user can pick
+#define NAMCO           27  // Not one of the general mappers a user can pick
+#define WIZARDRY        28  // Not one of the general mappers a user can pick
+#define KOEISRAM32      29  // Not one of the general mappers a user can pick
+#define MANBOW2         30  // Not one of the general mappers a user can pick
+#define HAMARAJANIGHT   31  // Not one of the general mappers a user can pick
+#define RBSC_FLASH      32  // Not one of the general mappers a user can pick
+#define MATRACOMP       33  // Not one of the general mappers a user can pick
+#define MEGA_SCC        34  // For our special MEGARAM SCC 'Cart'
+#define FMPAC_SRAM      35  // For our special FM-PAC 'Cart'
+#define SCCPLUS_RAM     36  // For our special SCC+ 'Cart'
 
 #define MAX_GUESS_MAPPER 8   // The highest guess we can guess when examining ROM data
 

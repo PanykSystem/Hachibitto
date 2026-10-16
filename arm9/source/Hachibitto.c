@@ -57,8 +57,6 @@ u32 debug[0x10]={0};
 u32 DX = 0;
 u32 DY = 0;
 
-volatile u32 dsVSyncCount = 0;  // So compiler doesn't cache this as it changes dynamically with interrupt calls
-
 u32 last_vsync_count    __attribute__((section(".dtcm"))) = 0xFEEDBEEF;
 s8  temp_offset         __attribute__((section(".dtcm"))) = 0;
 u8  slide_dampen        __attribute__((section(".dtcm"))) = 0;
@@ -105,24 +103,25 @@ u8 key_graph __attribute__((section(".dtcm"))) = false;
 u16 emuActFrames    __attribute__((section(".dtcm"))) = 0;
 u16 timingFrames    __attribute__((section(".dtcm"))) = 0;
 u8  render_blended  __attribute__((section(".dtcm"))) = 0;
-u8  soundEmuPause   __attribute__((section(".dtcm"))) = 1;       // Set to 1 to pause (mute) sound, 0 is sound unmuted (sound channels active)
+u8  soundEmuPause   __attribute__((section(".dtcm"))) = 1;        // Set to 1 to pause (mute) sound, 0 is sound unmuted (sound channels active)
 
-// -----------------------------------------------------------------------------
-// This set of critical vars is what determines the game type is... ROM vs DSK
-// -----------------------------------------------------------------------------
 u8 kbd_key           __attribute__((section(".dtcm"))) = 0;       // 0 if no key pressed, othewise the ASCII key (e.g. 'A', 'B', '3', etc)
 u16 nds_key          __attribute__((section(".dtcm"))) = 0;       // 0 if no key pressed, othewise the NDS keys from keysCurrent() or similar
 u8 last_mapped_key   __attribute__((section(".dtcm"))) = 0;       // The last mapped key which has been pressed - used for key click feedback
 u8 kbd_keys_pressed  __attribute__((section(".dtcm"))) = 0;       // Each frame we check for keys pressed - since we can map keyboard keys to the NDS, there may be several pressed at once
-u8 kbd_keys[12]      __attribute__((section(".dtcm")));           // Up to 12 possible keys pressed at the same time (we have 12 NDS physical buttons though it's unlikely that more than 2 or maybe 3 would be pressed)
+u8 kbd_keys[12]      __attribute__((section(".dtcm"))) = {0};     // Up to 12 possible keys pressed at the same time (we have 12 NDS physical buttons though it's unlikely that more than 2 or maybe 3 would be pressed)
 
+// ---------------------------------------------------------
+// These less-used vars don't need to be in fast memory...
+// ---------------------------------------------------------
 u8 bStartSoundEngine = false;  // Set to true to unmute sound after 1 frame of rendering...
 int bg0, bg1, bg0b, bg1b;      // Some vars for NDS background screen handling
-volatile u16 vusCptVBL  = 0;   // We use this as a basic timer for the random screenshots shown
-u8 touch_debounce       = 0;   // A bit of touch-screen debounce
-u8 key_debounce         = 0;   // A bit of key debounce
-u8 msx_caps_lock        = 0;   // Set to 1 when MSX caps lock is active
-u8 msx_kana_lock        = 0;   // Set to 1 when MSX kana lock is active
+volatile u16 vusCptVBL    = 0; // We use this as a basic timer for the random screenshots shown
+volatile u32 dsVSyncCount = 0; // So compiler doesn't cache this as it changes dynamically with interrupt calls
+u8 touch_debounce         = 0; // A bit of touch-screen debounce
+u8 key_debounce           = 0; // A bit of key debounce
+u8 msx_caps_lock          = 0; // Set to 1 when MSX caps lock is active
+u8 msx_kana_lock          = 0; // Set to 1 when MSX kana lock is active
 
 // The DS/DSi has 12 keys that can be mapped
 u16 NDS_keyMap[12] __attribute__((section(".dtcm"))) = {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_A, KEY_B, KEY_X, KEY_Y, KEY_R, KEY_L, KEY_START, KEY_SELECT};
@@ -221,7 +220,7 @@ u32 keyCoresp[MAX_KEY_OPTIONS] __attribute__((section(".dtcm"))) = {
     META_KBD_SHOWBOT,
 };
 
-static char tmp[64];    // For various sprintf() calls
+static char tmpStr[64];    // For various sprintf() calls
 
 // ------------------------------------------------------------
 // Utility function to pause the sound...
@@ -304,17 +303,17 @@ ITCM_CODE void ProcessDirectAudio(void)
     u8 bMix = 0;
     s16 mix1[16];
     s16 mix2[16];
-    
+
     if (scc_sample_idx & 0xF0)  // To avoid call overhead, we grab 16 SCC samples at a time...
     {
         SCCMixer(16, mixbufSCC, &mySCC);
         scc_sample_idx = 0;
     }
-    
+
     if (breather) {return;}
-    
+
     ay38910Mixer(SAMPLES_PER_DIRECT_CALL, mix1, &myAY);   // Always grab AY samples
-     
+
     if (msx_scc_capable_game)   // If SCC enabled, grab SCC samples...
     {
         mix2[0] = mixbufSCC[scc_sample_idx++];
@@ -333,8 +332,8 @@ ITCM_CODE void ProcessDirectAudio(void)
         if (myConfig.expansion == EXP_BEEPER)
         {
             // This is mixed directly into mix1
-            lastBeeper ^= 0x2000;   
-            beeperFreq = 0;         
+            lastBeeper ^= 0x2000;
+            beeperFreq = 0;
         }
     }
 
@@ -371,7 +370,7 @@ mm_word ClickRemoval(mm_word len, mm_addr dest)
 {
     s16 mix1[16];
     s16 mix2[16];
-    
+
     ay38910Mixer(16, mix1, &myAY);  // Mix AY and give us something to move towards
     if (msx_music_capable_game)
     {
@@ -384,9 +383,9 @@ mm_word ClickRemoval(mm_word len, mm_addr dest)
         s32 sample = mix1[15] + mix2[15];
         if (sample > 32767) sample = 32767;
         if (sample < -32767) sample = -32767;
-        mix1[15] = sample;        
+        mix1[15] = sample;
     }
-        
+
     int target = mix1[15];          // This is what we are smoothing towards
 
     s16 *p = (s16*)dest;
@@ -396,13 +395,13 @@ mm_word ClickRemoval(mm_word len, mm_addr dest)
         if (last_sample > (target+32)) last_sample -= 8;
         *p++ = last_sample;
     }
-    
+
     if (--bClickRemoveNeeded == 0)
     {
         mixer_read = mixer_write = 0;
     }
-    
-    return len;   
+
+    return len;
 }
 
 // -----------------------------------------------------------------------------------------------
@@ -422,7 +421,7 @@ ITCM_CODE mm_word OurSoundMixer(mm_word len, mm_addr dest, mm_stream_formats for
     else
     {
         if (bClickRemoveNeeded) return ClickRemoval(len, dest);
-                
+
         s16 *p = (s16*)dest;
         s16 local_sample = last_sample; // A tiny bit faster to move this locally
         for (int i=0; i<len; i++)
@@ -436,21 +435,21 @@ ITCM_CODE mm_word OurSoundMixer(mm_word len, mm_addr dest, mm_stream_formats for
             }
         }
         if (breather) {breather -= len; if (breather < 0) breather = 0;}
-        
+
         // If we need to mix in MSX-MUSIC, we grab those samples now and mix directly on top of the output
         if (msx_music_capable_game)
         {
             YMMixer(len, dest, &myYM);
-        }        
-        
-        last_sample = ((s16*)dest)[len-1];        
+        }
+
+        last_sample = ((s16*)dest)[len-1];
     }
 
     return  len;
 }
 
 // -----------------------------------------------------------------------------------------------
-// This is the 'LITE' version of the mixer. It assumes no direct audio processing and simply 
+// This is the 'LITE' version of the mixer. It assumes no direct audio processing and simply
 // grabs fresh samples and mixes them into the output. Faster for the older DS-Lite/Phat hardware.
 // -----------------------------------------------------------------------------------------------
 ITCM_CODE mm_word OurSoundMixer_Lite(mm_word len, mm_addr dest, mm_stream_formats format)
@@ -466,7 +465,7 @@ ITCM_CODE mm_word OurSoundMixer_Lite(mm_word len, mm_addr dest, mm_stream_format
     else
     {
         if (bClickRemoveNeeded) return ClickRemoval(len, dest);
-        
+
         if (msx_music_capable_game) // If MSX-MUSIC is enabled, we mix AY with the FM channels
         {
             ay38910Mixer(len, dest, &myAY);   // Get AY - we mix YM directly on top...
@@ -490,7 +489,7 @@ ITCM_CODE mm_word OurSoundMixer_Lite(mm_word len, mm_addr dest, mm_stream_format
 
                 s32 scc = mixer[i | 0x400];
                 scc -= scc >> 2;
-                
+
                 s32 combined = ay + scc;
 
                 if (combined > 32767) combined = 32767;
@@ -580,7 +579,7 @@ void sound_chip_reset()
     s16 mixbuf[16];
 
     SoundPause();
-    
+
     bClickRemoveNeeded = 150;        // When we re-enable... smooth it to avoid pops/clicks
 
     msx_scc_capable_game = 0;        // Until proven otherwise
@@ -588,7 +587,7 @@ void sound_chip_reset()
     lastBeeper = 0;                  // No beeper yet
     scc_sample_idx = 0;              // Direct Audio reset SCC sample position
     memset(mixer, 0x00, sizeof(mixer));
-    
+
     // -----------------------------------------------------------
     // The AY sound chip is for our baseline MSX sound handling.
     // -----------------------------------------------------------
@@ -699,55 +698,55 @@ int getMemFree() { // returns the amount of free memory in bytes
 void ShowDebugZ80(void)
 {
     u8 idx=1;
-    
-    sprintf(tmp, "VDP: %02X %02X %02X %02X %02X %02X %02X %02X", VDP[0],VDP[1],VDP[2],VDP[3], VDP[4],VDP[5],VDP[6],VDP[7]);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "VDP: %02X %02X %02X %02X %02X %02X %02X %02X", VDP[8],VDP[9],VDP[10],VDP[11], VDP[12],VDP[13],VDP[14],VDP[15]);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "VDP: %02X %02X %02X %02X %02X %02X %02X %02X", VDP[16],VDP[17],VDP[18],VDP[19], VDP[20],VDP[21],VDP[22],VDP[23]);
-    DSPrint(0,idx++,7, tmp);
 
-    sprintf(tmp, "VStat %02X %02X %02X %02X Data=%02X", VDPStatus[0], VDPStatus[1], VDPStatus[2], VDPStatus[3], VDPDlatch);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "VAddr %08X", (VDP[14]<<14)+(int)VAddr);
-    DSPrint(0,idx++,7, tmp);
+    sprintf(tmpStr, "VDP: %02X %02X %02X %02X %02X %02X %02X %02X", VDP[0],VDP[1],VDP[2],VDP[3], VDP[4],VDP[5],VDP[6],VDP[7]);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "VDP: %02X %02X %02X %02X %02X %02X %02X %02X", VDP[8],VDP[9],VDP[10],VDP[11], VDP[12],VDP[13],VDP[14],VDP[15]);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "VDP: %02X %02X %02X %02X %02X %02X %02X %02X", VDP[16],VDP[17],VDP[18],VDP[19], VDP[20],VDP[21],VDP[22],VDP[23]);
+    DSPrint(0,idx++,7, tmpStr);
+
+    sprintf(tmpStr, "VStat %02X %02X %02X %02X Data=%02X", VDPStatus[0], VDPStatus[1], VDPStatus[2], VDPStatus[3], VDPDlatch);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "VAddr %08X", (VDP[14]<<14)+(int)VAddr);
+    DSPrint(0,idx++,7, tmpStr);
     idx++;
 
-    sprintf(tmp, "Z80PC %04X", CPU.PC.W);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "Z80SP %04X", CPU.SP.W);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "Z80AF %04X", CPU.AF.W);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "Z80BC %04X", CPU.BC.W);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "Z80DE %04X", CPU.DE.W);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "IRQ %04X %d", CPU.IRequest, (CPU.NumInts % 99999));
-    DSPrint(0,idx++,7, tmp);
+    sprintf(tmpStr, "Z80PC %04X", CPU.PC.W);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "Z80SP %04X", CPU.SP.W);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "Z80AF %04X", CPU.AF.W);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "Z80BC %04X", CPU.BC.W);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "Z80DE %04X", CPU.DE.W);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "IRQ %04X %d", CPU.IRequest, (CPU.NumInts % 99999));
+    DSPrint(0,idx++,7, tmpStr);
     idx++;
 
-    sprintf(tmp, "AY:%02X %02X %02X %02X", myAY.ayRegs[0], myAY.ayRegs[1], myAY.ayRegs[2], myAY.ayRegs[3]);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "AY:%02X %02X %02X %02X", myAY.ayRegs[4], myAY.ayRegs[5], myAY.ayRegs[6], myAY.ayRegs[7]);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "AY:%02X %02X %02X %02X", myAY.ayRegs[8], myAY.ayRegs[9], myAY.ayRegs[10], myAY.ayRegs[11]);
-    DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "AY:%02X %02X %02X %02X", myAY.ayRegs[12], myAY.ayRegs[13], myAY.ayRegs[14], myAY.ayRegs[15]);
-    DSPrint(0,idx++,7, tmp);
+    sprintf(tmpStr, "AY:%02X %02X %02X %02X", myAY.ayRegs[0], myAY.ayRegs[1], myAY.ayRegs[2], myAY.ayRegs[3]);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "AY:%02X %02X %02X %02X", myAY.ayRegs[4], myAY.ayRegs[5], myAY.ayRegs[6], myAY.ayRegs[7]);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "AY:%02X %02X %02X %02X", myAY.ayRegs[8], myAY.ayRegs[9], myAY.ayRegs[10], myAY.ayRegs[11]);
+    DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "AY:%02X %02X %02X %02X", myAY.ayRegs[12], myAY.ayRegs[13], myAY.ayRegs[14], myAY.ayRegs[15]);
+    DSPrint(0,idx++,7, tmpStr);
 
     idx++;
-    sprintf(tmp, "S%d  A8=%02X %02X", ScrMode, Port_PPI_A, msx_subslot); DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "FD.ST=%02X CM=%02X", FDC.status, FDC.command); DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "Mapper %d [%02X]", MyMedia[MEDIA_CART1].mapperType, MyMedia[MEDIA_CART1].mapperMask); DSPrint(0,idx++,7, tmp);
+    sprintf(tmpStr, "S%d  A8=%02X %02X", ScrMode, Port_PPI_A, msx_subslot); DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "FD.ST=%02X CM=%02X", FDC.status, FDC.command); DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "Mapper %d [%02X]", MyMedia[MEDIA_CART1].mapperType, MyMedia[MEDIA_CART1].mapperMask); DSPrint(0,idx++,7, tmpStr);
     extern u32 halt_counter;
-    sprintf(tmp, "Halt C %d", halt_counter & 0x1FFFF); DSPrint(0,idx++,7, tmp);
-    sprintf(tmp, "%d Free", getMemFree()); DSPrint(0,idx++,7, tmp);
+    sprintf(tmpStr, "Halt C %d", halt_counter & 0x1FFFF); DSPrint(0,idx++,7, tmpStr);
+    sprintf(tmpStr, "%d Free", getMemFree()); DSPrint(0,idx++,7, tmpStr);
 
     idx = 6;
     for (u8 i=0; i< 16; i++)
     {
-        sprintf(tmp, "D%-2d %-8lu %04X", i, debug[i], (u16)debug[i]); DSPrint(15,idx++,7, tmp);
+        sprintf(tmpStr, "D%-2d %-8lu %04X", i, debug[i], (u16)debug[i]); DSPrint(15,idx++,7, tmpStr);
     }
 }
 
@@ -1231,7 +1230,7 @@ void HachibittoRunEmu(void)
         {
             DisplayStatusLine();
         }
-        
+
         // -----------------------------------------------------
         // Vertical Sync reduces tearing but costs CPU time...
         // -----------------------------------------------------
@@ -1703,7 +1702,7 @@ void useVRAM(void)
     vramSetBankF(VRAM_F_LCD );        // Not using this for video but 16K of faster RAM always useful!   Mapped at 0x06890000 -   ..
     vramSetBankG(VRAM_G_LCD );        // Not using this for video but 16K of faster RAM always useful!   Mapped at 0x06894000 -   ..
     vramSetBankH(VRAM_H_LCD );        // Not using this for video but 32K of faster RAM always useful!   Mapped at 0x06898000 -   ..
-    vramSetBankI(VRAM_I_LCD );        // Not using this for video but 16K of faster RAM always useful!   Mapped at 0x068A0000 -   16K Used for the VDP Look Up Table
+    vramSetBankI(VRAM_I_LCD );        // Not using this for video but 16K of faster RAM always useful!   Mapped at 0x068A0000 -   16K available for general use...
 }
 
 void ShowInstructions(void)
@@ -2280,11 +2279,11 @@ void msxUpdateScreen(void)
         // Alternate frame buffers except for aggressive skip (then just render from the A buffer)
         if (drawn_frame_number & render_blended)
         {
-            dmaCopyWordsAsynch(2, (u32*)XBuf, (u32*)DS_LCD_VRAM_2, 256*212);
+            dmaCopyWordsAsynch(2, (u32*)XBuf[(drawn_frame_number+1)&1], (u32*)DS_LCD_VRAM_2, 256*212);
         }
         else
         {
-            dmaCopyWordsAsynch(2, (u32*)XBuf, (u32*)DS_LCD_VRAM_1, 256*212);
+            dmaCopyWordsAsynch(2, (u32*)XBuf[(drawn_frame_number+1)&1], (u32*)DS_LCD_VRAM_1, 256*212);
         }
     }
 
@@ -2423,10 +2422,10 @@ u32 LoopZ80(void)
 
   // Refresh VDP
   Loop9938();
-  
+
   // ------------------------------------------------------------------------------------
   // Zanac EX has a graphical glitch on return to main menu due to sensitive timing.
-  // For this game only, we drop the FH flag immediately if IE1 is clear. This is a 
+  // For this game only, we drop the FH flag immediately if IE1 is clear. This is a
   // game-specific workaround for an unresolved VDP timing discrepancy. Fix this someday.
   // ------------------------------------------------------------------------------------
   if (zanac_glitch_patch)
@@ -2437,7 +2436,7 @@ u32 LoopZ80(void)
           SetVDPIRQ(VDP_IRQ_LINE, 0);   // And ensure the IRQ is not set for the Line Interrupt
       }
   }
-  
+
   // Generate an interrupt if called for...
   if(CPU.IRequest != INT_NONE)
   {
@@ -2448,7 +2447,7 @@ u32 LoopZ80(void)
           mid_frame_interrupt=3; // Let CPU run for 2 lines then redraw the previous 2...
       }
   }
-  
+
   // Drop out unless end of screen is reached
   if (CurLine == VDP9938_END_LINE)
   {
