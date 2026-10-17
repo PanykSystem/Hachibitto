@@ -1496,7 +1496,7 @@ void HachibittoRunEmu(void)
           {
               if (nds_key & KEY_UP)
               {
-                  if (myConfig.yOffset < 20)
+                  if (myConfig.yOffset < (myConfig.overscan ? 32:20))
                   {
                       myConfig.yOffset++;
                   }
@@ -1616,10 +1616,10 @@ void HachibittoRunEmu(void)
                       else if (keyCoresp[myConfig.keymap[i]] == META_KBD_F3)        kbd_key = KBD_KEY_F3;
                       else if (keyCoresp[myConfig.keymap[i]] == META_KBD_F4)        kbd_key = KBD_KEY_F4;
                       else if (keyCoresp[myConfig.keymap[i]] == META_KBD_F5)        kbd_key = KBD_KEY_F5;
-                      else if (keyCoresp[myConfig.keymap[i]] == META_KBD_PANUP)     {if (VDP[9] & 0x80) {temp_offset = -myConfig.yOffset; slide_dampen = 15;}}
-                      else if (keyCoresp[myConfig.keymap[i]] == META_KBD_PANDN)     {if (VDP[9] & 0x80) {temp_offset =  (20-myConfig.yOffset); slide_dampen = 15;}}
+                      else if (keyCoresp[myConfig.keymap[i]] == META_KBD_PANUP)     {if ((VDP[9] & 0x80) || myConfig.overscan) {temp_offset = -myConfig.yOffset; slide_dampen = 15;}}
+                      else if (keyCoresp[myConfig.keymap[i]] == META_KBD_PANDN)     {if ((VDP[9] & 0x80) || myConfig.overscan) {temp_offset =  ((myConfig.overscan ? 32:20)-myConfig.yOffset); slide_dampen = 15;}}
                       else if (keyCoresp[myConfig.keymap[i]] == META_KBD_SHOWTOP)   {myConfig.yOffset = 0;}
-                      else if (keyCoresp[myConfig.keymap[i]] == META_KBD_SHOWBOT)   {myConfig.yOffset = 20;}
+                      else if (keyCoresp[myConfig.keymap[i]] == META_KBD_SHOWBOT)   {myConfig.yOffset = (myConfig.overscan ? 32:20);}
 
                       if (kbd_key != 0)
                       {
@@ -1966,7 +1966,7 @@ ITCM_CODE void irqVBlank(void)
     // ---------------------------------------------------------------------
     // Are we in 192 scanline mode? If so, we don't need ANY screen panning.
     // ---------------------------------------------------------------------
-    if (!(VDP[9] & 0x80)) // High bit set if we are in 212 mode
+    if (!(VDP[9] & 0x80) && !myConfig.overscan) // High bit set if we are in 212 mode (we ignore this if overscan enabled)
     {
         cyBG = 0;       // No shift
         shifty = 0;     // No shift
@@ -1985,7 +1985,7 @@ ITCM_CODE void irqVBlank(void)
         // --------------------------------------------------------------------
         if (myConfig.scaleScreen)
         {
-            ydyBG = ((212 / 192) << 8) | (212 % 192);
+            ydyBG = (((myConfig.overscan ? 224:212) / 192) << 8) | ((myConfig.overscan ? 224:212) % 192);
             if (myConfig.yOffset+temp_offset == 0)  cyBG = (1<<8);
             shifty=20;
         }
@@ -2276,14 +2276,28 @@ void msxUpdateScreen(void)
 {
     if (!skip_render)
     {
-        // Alternate frame buffers except for aggressive skip (then just render from the A buffer)
+        // If we are set for overscan but the overscan trick wasn't used, clear out the bottom of the XBuf[] buffer
+        if (myConfig.overscan && !overscan_trick)
+        {
+            memset(XBuf[(drawn_frame_number+1)&1]+256*((VDP[9]&0x80) ? 212:192), 0x00, 256*((VDP[9]&0x80) ? 12:32));
+        }
+        overscan_trick = 0;
+
+        // -----------------------------------------------------------------------------------------
+        // Alternate frame buffers except for aggressive skip (then just render from the A buffer).
+        // The main reason we use this is that the async render does not understand cached memory
+        // and if there is any memory that is not yet committed, it would not render properly. By
+        // rendering the LAST frame (not the current frame) we virtually ensure that the memory is
+        // stale enough to be rendered properly. Yes, this means that the output is 1 frame delayed
+        // but nobody notices 1/60th of a second and it's all butter smooth to the player.
+        // -----------------------------------------------------------------------------------------
         if (drawn_frame_number & render_blended)
         {
-            dmaCopyWordsAsynch(2, (u32*)XBuf[(drawn_frame_number+1)&1], (u32*)DS_LCD_VRAM_2, 256*212);
+            dmaCopyWordsAsynch(2, (u32*)XBuf[(drawn_frame_number+1)&1], (u32*)DS_LCD_VRAM_2, (myConfig.overscan ? (256*224) : (256*212)));
         }
         else
         {
-            dmaCopyWordsAsynch(2, (u32*)XBuf[(drawn_frame_number+1)&1], (u32*)DS_LCD_VRAM_1, 256*212);
+            dmaCopyWordsAsynch(2, (u32*)XBuf[(drawn_frame_number+1)&1], (u32*)DS_LCD_VRAM_1, (myConfig.overscan ? (256*224) : (256*212)));
         }
     }
 

@@ -19,11 +19,10 @@
 
 #include "vdp9938.h"
 
-//#define DEBUG_REFRESH(x) debug[x]++;
-#define DEBUG_REFRESH(x)
+#define DEBUG_REFRESH(x) //debug[x]++;
 
 volatile u8 bufferZone1[32] = {0};      // In case we ever index out of bounds (we removed some safety checks to speed it up)
-u8 XBuf[2][256*212] ALIGN(32) = {0};    // VDP9938 screen is 256x212. We double-buffer the output.
+u8 XBuf[2][256*224] ALIGN(32) = {0};    // VDP9938 screen is 256x224 (for overscan). We double-buffer the output.
 volatile u8 bufferZone2[32] = {0};      // In case we ever index out of bounds (we removed some safety checks to speed it up)
 
 u8 XPal[256]                __attribute__((section(".dtcm"))) = {0};
@@ -37,6 +36,7 @@ u8 CurrentEpochSaved        __attribute__((section(".dtcm"))) = 0;
 u8 msx_irq_pending          __attribute__((section(".dtcm"))) = 0;   // Bitmask, one bit per VDP interrupt source
 u8 palette_latch            __attribute__((section(".dtcm"))) = 0;
 u16 screenPanX              __attribute__((section(".dtcm"))) = 0;   // Horizontal pan in output pixels: 0, 2, 4, ... 256
+u8 overscan_trick           __attribute__((section(".dtcm"))) = 0;   // Will be set to 1 if game tries to bypass the VSYNC
 
 u8 frame_draw_mask[3][16]   __attribute__((section(".dtcm"))) = {
                             {1,1,1,1,1,1,1,1,   1,1,1,1,1,1,1,1},  // No frameskip: 100% (every frame drawn)
@@ -70,6 +70,7 @@ u8 Screen8SpriteByteLUT[256] __attribute__((section(".dtcm"))) =
 u8  OccBuf[320]             __attribute__((section(".dtcm")));
 u16 nibbleLUT16[256]        __attribute__((section(".dtcm")));
 u32 Screen2NibbleMask[16]   __attribute__((section(".dtcm")));
+
 
 inline void handle_transparency(void)
 {
@@ -1554,8 +1555,6 @@ ITCM_CODE void RefreshLine4(uint8_t Y)
         {
             /*
              * Keep the original byte-at-a-time path for unaligned output.
-             * This avoids spending ITCM on another large unrolled loop for
-             * a path that is much less important.
              */
             X = 32;
 
@@ -2518,6 +2517,19 @@ ITCM_CODE void Write9938(u8 iReg, u8 value)
     value &= VDP_RegisterMasks[iReg];
   }
 
+  // --------------------------------------------------------------------------
+  // The overscan trick is when the system is configured for 212 scanline mode
+  // and then when the 192 scanline boundary is passed, the game sets the 192
+  // scanline mode and the hardware is fooled into not generating a VBLANK.
+  // --------------------------------------------------------------------------
+  if (iReg == 9)
+  {
+      if ((VDP[9] & 0x80) && (!(value & 0x80)) && (CurLine > 192))
+      {
+          overscan_trick = 1;
+      }
+  }
+
   /* Store value into the register */
   VDP[iReg]=value;
 
@@ -2531,10 +2543,12 @@ ITCM_CODE void Write9938(u8 iReg, u8 value)
             SetVDPIRQ(VDP_IRQ_LINE, 0);
         }
         break;
+
     case 1:
         if(VDPStatus[0]&0x80) SetVDPIRQ(VDP_IRQ_VBLANK, value&0x20? 1:0);
         break;
-    case  7:
+
+    case 7:
       FGColor=value>>4;
       BGColor=value&0x0F;
       break;
@@ -2757,7 +2771,7 @@ ITCM_CODE void Loop9938(void)
   }
   else
   /* If refreshing display area, call scanline handler */
-  if ((CurLine >= VDP9938_START_LINE) && (CurLine < VDP9938_END_LINE))
+  if ((CurLine >= VDP9938_START_LINE) && (CurLine < VDP9938_END_LINE + (myConfig.overscan ? 12:0)))
   {
       u8 scan_sprites = 0;
 
@@ -2771,9 +2785,9 @@ ITCM_CODE void Loop9938(void)
           // line will actually be one of the ones rendered to the DS LCD.
           // ---------------------------------------------------------------
           int first_visible_line = VDP9938_START_LINE;
-          if (VDP[9] & 0x80) first_visible_line += myConfig.yOffset+temp_offset;
+          if ((VDP[9] & 0x80) || myConfig.overscan) first_visible_line += myConfig.yOffset+temp_offset;
 
-          if ((CurLine >= first_visible_line) &&  (CurLine < (first_visible_line+(myConfig.scaleScreen ? 212:192))))
+          if ((CurLine >= first_visible_line) &&  (CurLine < (first_visible_line+(myConfig.scaleScreen ? (myConfig.overscan ? 224:212):192))))
           {
               RefreshLine(CurLine - VDP9938_START_LINE);
           }
@@ -2817,7 +2831,7 @@ ITCM_CODE void Loop9938(void)
       }
   }
   /* If time for emulated VBlank... */
-  else if (CurLine == VDP9938_END_LINE)
+  if (CurLine == VDP9938_END_LINE)
   {
       // -------------------------------------
       // !!!Into the Vertical Blank!!!
@@ -2828,14 +2842,18 @@ ITCM_CODE void Loop9938(void)
       }
       frame_number++; // This one tracks all frames... drawn or skipped
 
-      /* Generate IRQ when enabled and when VBlank flag goes up */
-      if (VDP9938_VBlankON && !(VDPStatus[0]&VDP9938_STAT_VBLANK))
+      // The Vertical Blank interrupt is skipped if we are configured for Overscan and the overscan trick was used this frame.
+      if (!myConfig.overscan || !overscan_trick)
       {
-          SetVDPIRQ(VDP_IRQ_VBLANK, 1);
-      }
+          /* Generate IRQ when enabled and when VBlank flag goes up */
+          if (VDP9938_VBlankON && !(VDPStatus[0]&VDP9938_STAT_VBLANK))
+          {
+              SetVDPIRQ(VDP_IRQ_VBLANK, 1);
+          }
 
-      /* Set VBlank status flag */
-      VDPStatus[0] |= VDP9938_STAT_VBLANK;
+          /* Set VBlank status flag */
+          VDPStatus[0] |= VDP9938_STAT_VBLANK;
+      }
 
       /* Set Sprite Collision status flag */
       if(!(VDPStatus[0]&VDP9938_STAT_OVRLAP))
@@ -2919,6 +2937,7 @@ void Reset9938(void)
     frame_number = 0;                       // Zero frame counter
     drawn_frame_number = 0;                 // Zero frame counter
     msx_irq_pending = 0;                    // No IRQs pending
+    overscan_trick = 0;                     // No overscan until we detect it
 
     ChrTabM = 0x3FFF;                       // Default Mask
     ColTabM = 0x3FFF;                       // Default Mask

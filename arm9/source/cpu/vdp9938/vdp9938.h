@@ -64,12 +64,13 @@ typedef struct {
   byte R2,R3,R4,R5,M2,M3,M4,M5;
 } tScrMode;
 
-extern u8 XBuf[2][256*212];
+extern u8 XBuf[2][256*224];
 extern u8 OH;
 extern u8 IH;
 extern u8 *VPAGE;
 
 extern u8 bResetVLatch;
+extern u8 overscan_trick;
 
 extern u8 VDP9938A_palette[16*3];
 extern tScrMode SCR[MAXSCREEN+1];

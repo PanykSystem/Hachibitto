@@ -880,13 +880,13 @@ static const GameTweak gameTweaks[] =
     { "URIDIUM",         NULL,                TWEAK_NONE,      TWEAK_NONE,  0,           TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "ANTARCTIC",       "ADVENTURE",         TWEAK_NONE,      TWEAK_NONE,  0,           TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "ADVENTURES",      "PARK",              TWEAK_NONE,      TWEAK_NONE,  0,           TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-                                                                                                                                        
-    // SCC+                                                                                                                             
+
+    // SCC+
     { "SNATCHER",        NULL,              EXP_SCC_PLUS,   FS_AGGRESSIVE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-                                                                                                                                        
-    // Aggressive frame skip on DS-Lite                                                                                                 
+
+    // Aggressive frame skip on DS-Lite
     { "MANBOW",          NULL,                TWEAK_NONE,   FS_AGGRESSIVE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-                                                                                                                                        
+
     // MSX-MUSIC
     { "SINGULAR",        "STONE",             EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "ANGELIC",         "WARRIOR",           EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         YM_BAL_MED  },
@@ -928,17 +928,17 @@ static const GameTweak gameTweaks[] =
     { "FEEDBACK",        NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "MASTER 3",        NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "MASTER III",      NULL,                EXP_FM_PAC,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
-                                                                                                                                        
-    // D-Pad                                                                                                                            
+
+    // D-Pad
     { "ARKANOID",        NULL,                TWEAK_NONE,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    DPAD_ARKANOID,      TWEAK_NONE  },
     { "CHUCKIE",         NULL,                TWEAK_NONE,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    DPAD_SLIDE_N_GLIDE, TWEAK_NONE  },
     { "QBERT",           NULL,                TWEAK_NONE,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    DPAD_DIAGONALS,     TWEAK_NONE  },
     { "Q-BERT",          NULL,                TWEAK_NONE,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    DPAD_DIAGONALS,     TWEAK_NONE  },
-                                                                                                                                        
-    // Machine type                                                                                                                     
+
+    // Machine type
     { "KING",            "BALLOON",           TWEAK_NONE,      TWEAK_NONE,  TWEAK_NONE,  MACHINE_MSX1,  TWEAK_NONE,         TWEAK_NONE  },
-                                                                                                                                        
-    // Beeper                                                                                                                           
+
+    // Beeper
     { "WAY",             "TIGER",             EXP_BEEPER,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "JACK",            "NIPPER",            EXP_BEEPER,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
     { "MASTER",          "LAMPS",             EXP_BEEPER,      TWEAK_NONE,  TWEAK_NONE,  TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE  },
@@ -990,7 +990,7 @@ void ApplyDatabaseTweaks(void)
         if (t->ymScale != TWEAK_NONE)
             myConfig.ymScale = t->ymScale;
     }
-    
+
     // ----------------------------------------------------------
     // Zanac-EX return to main menu corruption is not yet fixed
     // properly by more accurate VDP handling... so we patch it.
@@ -999,6 +999,22 @@ void ApplyDatabaseTweaks(void)
     if (strstr(filename, "ZANAC-EX") || strstr(filename, "ZANACEX"))
     {
         zanac_glitch_patch = 1;
+    }
+
+    if (strstr(filename, "FIX") && strstr(filename, "FELIX"))
+    {
+        myConfig.overscan = 1;
+        myConfig.scaleScreen = 1;
+    }
+
+    if (strstr(filename, "BOMB") && strstr(filename, "BUNNY"))
+    {
+        myConfig.overscan = 1;
+    }
+
+    if (strstr(filename, "DON'T") && strstr(filename, "COCK"))
+    {
+        myConfig.overscan = 1;
     }
 }
 
@@ -1081,7 +1097,7 @@ void SetDefaultGameConfig(void)
     myConfig.maskBorders  = 0;                           // No border masking by default
     myConfig.frameSkip    = (isDSiMode() ? 0:1);         // Frame Skip is disabled on DSi and above
     myConfig.ymScale      = 3;                           // Normal YM is scaled by x8
-    myConfig.reserved0    = 0;
+    myConfig.overscan     = 0;                           // VDP Overscan disabled until specifically enabled
     myConfig.reserved1    = 0;
     myConfig.reserved2    = 0;
     myConfig.reserved3    = 0;
@@ -1180,7 +1196,7 @@ void FindConfig(void)
 struct options_t
 {
     const char  *label;
-    const char  *option[32];
+    const char  *option[34];
     u8          *option_val;
     u8           option_max;
 };
@@ -1199,11 +1215,13 @@ const struct options_t Option_Table[2][20] =
         {"SPLIT TIMING",   {"0 LINES", "1 LINE", "2 LINES"},                                                                                                                    &myConfig.splitRefresh,     3},
         {"CPU SPEED",      {"NORMAL", "BOOSTED 10%", "BOOSTED 20%"},                                                                                                            &myConfig.cpuBoost,         3},
         {"EXPANSION",      {"NONE", "FM-PAC", "SCC+ (SCC-I)", "2x PSG", "BEEPER", "MEGARAM SCC"},                                                                               &myConfig.expansion,        6},
-        {"Y OFFSET",       {"None", "+1", "+2", "+3", "+4", "+5", "+6", "+7", "+8", "+9", "+10", "+11", "+12", "+13", "+14", "+15", "+16", "+17", "+18", "+19", "+20"},         &myConfig.yOffset,          21},
         {"SCREEN SCALE",   {"NONE", "COMPRESSED"},                                                                                                                              &myConfig.scaleScreen,      2},
         {"BORDER MASK",    {"NONE", "LEFT", "RIGHT", "LEFT + RIGHT"},                                                                                                           &myConfig.maskBorders,      4},
         {"FRAMESKIP",      {"NONE", "LIGHT", "AGGRESSIVE"},                                                                                                                     &myConfig.frameSkip,        3},
         {"YM BALANCE",     {"OFF", "LOW", "MEDIUM", "HIGH"},                                                                                                                    &myConfig.ymScale,          4},
+        {"VDP OVERSCAN",   {"OFF", "ENABLED"},                                                                                                                                  &myConfig.overscan,         2},
+        {"Y OFFSET",       {"None", "+1","+2","+3","+4","+5","+6","+7","+8","+9","+10","+11","+12","+13","+14","+15","+16","+17","+18","+19","+20","+21","+22","+23","+24",
+                                    "+25","+26","+27","+28","+29","+30","+31","+32"},                                                                                           &myConfig.yOffset,          33},
         {NULL,             {"",      ""},                                                                                                                                       NULL,                       1},
     },
 
@@ -1220,7 +1238,7 @@ const struct options_t Option_Table[2][20] =
 // ------------------------------------------------------------------
 // Display the current list of options for the user.
 // ------------------------------------------------------------------
-u8 display_options_list(bool bFullDisplay)
+u8 display_options_list(bool bFullDisplay, u8 highlight)
 {
     s16 len=0;
 
@@ -1230,7 +1248,7 @@ u8 display_options_list(bool bFullDisplay)
         while (true)
         {
             sprintf(strBuf, " %-12s : %-14s", Option_Table[option_table_idx][len].label, Option_Table[option_table_idx][len].option[*(Option_Table[option_table_idx][len].option_val)]);
-            DSPrint(1,5+len, (len==0 ? 2:0), strBuf); len++;
+            DSPrint(1,5+len, (len==highlight ? 2:0), strBuf); len++;
             if (Option_Table[option_table_idx][len].label == NULL) break;
         }
 
@@ -1259,7 +1277,7 @@ void HachibittoGameOptions(bool bIsGlobal)
 
     option_table_idx = 0;
 
-    idx=display_options_list(true);
+    idx=display_options_list(true, 0);
     optionHighlighted = 0;
     while (keysCurrent() != 0)
     {
@@ -1315,7 +1333,7 @@ void HachibittoGameOptions(bool bIsGlobal)
             if ((keysCurrent() & (KEY_L | KEY_R)))  // Switch Options Menu
             {
                 option_table_idx ^= 1;
-                idx=display_options_list(true);
+                idx=display_options_list(true, 0);
                 optionHighlighted = 0;
                 while (keysCurrent() != 0)
                 {
@@ -1323,6 +1341,13 @@ void HachibittoGameOptions(bool bIsGlobal)
                 }
             }
         }
+
+        if (!myConfig.overscan && myConfig.yOffset > 20)
+        {
+            myConfig.yOffset = 0;
+            (void)display_options_list(true, optionHighlighted);
+        }
+
         ShowRandomPreviewSnaps();
         swiWaitForVBlank();
     }

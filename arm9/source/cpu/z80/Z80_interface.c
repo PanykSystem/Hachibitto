@@ -79,7 +79,7 @@ void __attribute__((noinline)) HandleKonami8(u8 media_id, u16 address, u8 value)
     u32 block = (value & MyMedia[media_id].mapperMask);
     u32 msx_offset = block * MyMedia[media_id].blockSize;
     u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
-    
+
     if ((address & 0xE000) == 0x6000)
     {
         MSXCartPtr[media_id][3] = (u8*)src;  // Main ROM
@@ -602,7 +602,7 @@ void __attribute__((noinline)) HandleKoei_SRAM32K(u8 media_id, u16 address, u8 v
     }
 }
 
-            
+
 void __attribute__((noinline)) HandleKonamiSCC8(u8 media_id, u16 address, u8 value)
 {
     u32 block = (value & MyMedia[media_id].mapperMask);
@@ -708,7 +708,7 @@ void __attribute__((noinline)) HandleMegaSCC(u8 media_id, u16 address, u8 value)
         if ((address & 0xF800) == 0x9000)
         {
             // ------------------------------------------------------------------------
-            // For the Mega SCC, we enable the SCC the same way a Konami cart would... 
+            // For the Mega SCC, we enable the SCC the same way a Konami cart would...
             // ------------------------------------------------------------------------
             if ((value & 0x3F) == 0x3F)
             {
@@ -1082,7 +1082,7 @@ void __attribute__((noinline)) HandleMatraCompilation(u8 media_id, u16 address, 
     if (matra_compilation_offset >= 2) offset_block += (matra_compilation_offset-2);
     u32 msx_offset = offset_block * MyMedia[media_id].blockSize;
     u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
-    
+
     if (address == 0x5000)
     {
         if (matra_compilation_offset >= 2)
@@ -1250,19 +1250,22 @@ void __attribute__((noinline)) HandleGameMaster2(u8 media_id, u16 address, u8 va
 // in that it doesn't care if the cart is mapped into view as it will
 // respond to any write to 0x0000 no matter what.
 // ---------------------------------------------------------------------
-void __attribute__((noinline)) HandleSuperLodeRunner(u8 media_id, u8 value)
+void __attribute__((noinline)) HandleSuperLodeRunner(u8 media_id, u16 address, u8 value)
 {
     u32 block = (value & MyMedia[media_id].mapperMask);
     u32 msx_offset = block * MyMedia[media_id].blockSize;
-    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset);
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
 
-    MSXCartPtr[media_id][4] = (u8*)src;
-    MSXCartPtr[media_id][5] = (u8*)src+0x2000;
-
-    if (bCartInPage[2])
+    if (address == 0x0000)
     {
-        MemoryMap[4] = MSXCartPtr[media_id][4] - 0x8000;
-        MemoryMap[5] = MSXCartPtr[media_id][5] - 0xA000;
+        MSXCartPtr[media_id][4] = (u8*)src;
+        MSXCartPtr[media_id][5] = (u8*)src+0x2000;
+
+        if (bCartInPage[2]) // If the cart is mapped in, make the change effective now
+        {
+            MemoryMap[4] = MSXCartPtr[media_id][4] - 0x8000;
+            MemoryMap[5] = MSXCartPtr[media_id][5] - 0xA000;
+        }
     }
 }
 
@@ -1554,38 +1557,39 @@ void __attribute__((noinline)) HandleDiskControl(u16 address, u8 value)
 
 typedef void (*MapperWriteHandler)(u8 media_id, u16 address, u8 value);
 
-static MapperWriteHandler const mapperWriteHandlers[SCCPLUS_RAM + 1] __attribute__((section(".dtcm"))) =
+static MapperWriteHandler const mapperWriteHandlers[END_MAPPERS] __attribute__((section(".dtcm"))) =
 {
-    [KON8] = HandleKonami8,
-    [ASC8] = HandleAscii8,
-    [SCC8] = HandleKonamiSCC8,
-    [ASC16] = HandleAscii16,
-    [GENERIC_8K] = HandleGeneric8k,
-    [GENERIC_16K] = HandleGeneric16k,
-    [XBLAM] = HandleXBlam,
-    [XEVIOUS] = HandleXevious,
-    [ASC8SRAM8] = HandleAscii8_SRAM8,
-    [ASC8SRAM2] = HandleAscii8_SRAM2,
-    [ASC16SRAM2] = HandleAscii16_SRAM2,
-    [ASC16SRAM8] = HandleAscii16_SRAM8,
-    [GAME_MASTER2] = HandleGameMaster2,
-    [MAJUT] = HandleMajut,
-    [WIZARDRY] = HandleWizardry,
-    [KOEISRAM32] = HandleKoei_SRAM32K,
-    [MANBOW2] = HandleSCCFlash,
-    [HAMARAJANIGHT] = HandleSCCFlash,
-    [RBSC_FLASH] = HandleSCCFlash,
-    [MATRACOMP] = HandleMatraCompilation,
-    [MEGA_SCC] = HandleMegaSCC,
-    [FMPAC_SRAM] = HandleFMPAC,
-    [SCCPLUS_RAM] = HandleSCCPlus,
+    [KON8]              = HandleKonami8,
+    [ASC8]              = HandleAscii8,
+    [SCC8]              = HandleKonamiSCC8,
+    [ASC16]             = HandleAscii16,
+    [GENERIC_8K]        = HandleGeneric8k,
+    [GENERIC_16K]       = HandleGeneric16k,
+    [XBLAM]             = HandleXBlam,
+    [SUPERLR]           = HandleSuperLodeRunner,
+    [XEVIOUS]           = HandleXevious,
+    [ASC8SRAM8]         = HandleAscii8_SRAM8,
+    [ASC8SRAM2]         = HandleAscii8_SRAM2,
+    [ASC16SRAM2]        = HandleAscii16_SRAM2,
+    [ASC16SRAM8]        = HandleAscii16_SRAM8,
+    [GAME_MASTER2]      = HandleGameMaster2,
+    [MAJUT]             = HandleMajut,
+    [WIZARDRY]          = HandleWizardry,
+    [KOEISRAM32]        = HandleKoei_SRAM32K,
+    [MANBOW2]           = HandleSCCFlash,
+    [HAMARAJANIGHT]     = HandleSCCFlash,
+    [RBSC_FLASH]        = HandleSCCFlash,
+    [MATRACOMP]         = HandleMatraCompilation,
+    [MEGA_SCC]          = HandleMegaSCC,
+    [FMPAC_SRAM]        = HandleFMPAC,
+    [SCCPLUS_RAM]       = HandleSCCPlus,
 };
 
-// ------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // Write memory handles both normal writes and bankswitched since
-// write is much less common than reads... We handle the popular MSX
-// Konami 8K, SCC and ASCII 8K mappers directly here for max speed.
-// ------------------------------------------------------------------
+// write is much less common than reads... All of the MSX cart mappers
+// are vectored here so we can handle all the bank switching, etc.
+// ---------------------------------------------------------------------
 ITCM_CODE void cpu_writemem16(u16 address, u8 value)
 {
     if ((special_memory_access & SPEC_MEM_SUBSLOT_ACTIVE) && (address == 0xFFFF)) // Subslot check... only when page 3 is mapped to an expanded slot
@@ -1601,29 +1605,33 @@ ITCM_CODE void cpu_writemem16(u16 address, u8 value)
     {
         HandleDiskControl(address, value);
     }
-    else if ((special_memory_access & SPEC_MEM_SUPERLR_ACTIVE) && (address == 0x0000))
-    {
-        // ------------------------------------------------------------------------------
-        // In theory, the write to 0x0000 can come with any slot mapped in anywhere
-        // but this implementation requires that RAM not be mapped into page 0 or
-        // else we would never get to this check. We could move this check much further
-        // up but I don't want one game impacting other games with more common mappers.
-        // So far with testing, this implementation works fine for SuperLodeRunner.
-        // ------------------------------------------------------------------------------
-        HandleSuperLodeRunner(bCartInPage[address>>14] - 1, value);
-    }
     else if (bCartInPage[address>>14]) // Is there a Cartridge mapped into the write address area?
     {
-        u8 media_id = bCartInPage[address>>14] - 1; // Is this MEDIA_CART1 or MEDIA_CART2?
-        u8 mapper_type = MyMedia[media_id].mapperType;
+        u8 media_id = bCartInPage[address>>14] - 1;     // Is this MEDIA_CART1 or MEDIA_CART2?
+        u8 mapper_type = MyMedia[media_id].mapperType;  // And what type of CART is it?
 
         // -----------------------------------------------------------------------
         // Each cartridge mapper is different - call into the appropriate handler.
+        // A table-lookup here keeps this execution path relatively deterministic
+        // no matter how many mappers we have.
         // -----------------------------------------------------------------------
         if (mapperWriteHandlers[mapper_type] != NULL)
         {
             mapperWriteHandlers[mapper_type](media_id, address, value);
         }
+    }
+    else if ((special_memory_access & SPEC_MEM_SUPERLR_ACTIVE) && (address == 0x0000))
+    {
+        u8 media_id = MEDIA_CART1; // We only handle Super Lode Runner in CART1
+        
+        // ------------------------------------------------------------------------------
+        // In theory, the write to 0x0000 can come with any slot mapped in anywhere
+        // but this implementation requires that RAM not be mapped into page 0 or
+        // else we would never get to this check. We could move this check further
+        // up but I don't want one game impacting 99% of games with more common mappers.
+        // So far with testing, this implementation works fine for SuperLodeRunner.
+        // ------------------------------------------------------------------------------
+        HandleSuperLodeRunner(media_id, address, value);
     }
 }
 

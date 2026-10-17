@@ -828,7 +828,7 @@ void msx_slot_map_msx2(unsigned char Value)
 {
     special_memory_access &= ~SPEC_MEM_SUBSLOT_ACTIVE; // Until proven otherwise below...
     special_memory_access &= ~SPEC_MEM_DISK_CONTROLLER;
-    
+
     switch ((Value>>0) & 0x03)  // Page 0 [0x0000~0x3FFF]
     {
         case 0x00:  // Slot 0:  Maps to Main BIOS ROM
@@ -1056,12 +1056,12 @@ ITCM_CODE void cpu_writeport_msx(register u8 Port,register unsigned char Value)
         {
             u8 page = Port-0xFC;
             u8 bank = Value & 0xF; // 256K is 16K in 16 banks
-            
+
             if (myConfig.expansion == EXP_MEGARAM) // If we have mapped in the MEGARAM 'cart'... expand to 512K
             {
                 bank = Value & (isDSiMode() ? 0x3F : 0x1F); // 512K is 16K in 32 banks, for DSi 1MB is 16K in 64 banks
             }
-            
+
             mirror_ram_bank[page] = bank; // For read-back
 
             if (bank >= 16) // Expanded banks for the MEGARAM 'cart' are stored in upper ROM memory
@@ -1086,7 +1086,7 @@ ITCM_CODE void cpu_writeport_msx(register u8 Port,register unsigned char Value)
     {
         if (++msx_music_writes == 10) // Arbitrary... if we hit it at least 10 times, we turn on MSX MUSIC output
         {
-            if (myConfig.expansion == EXP_FM_PAC) 
+            if (myConfig.expansion == EXP_FM_PAC)
             {
                 msx_music_capable_game = 1;
                 bClickRemoveNeeded = 1;
@@ -1176,7 +1176,7 @@ void msxWipeRAM(void)
 // -------------------------------------------------------------------
 u8 Is16kBanking(void)
 {
-    if (MyMedia[MEDIA_CART1].mapperType == ASC16 || MyMedia[MEDIA_CART1].mapperType == ASC16SRAM2 || MyMedia[MEDIA_CART1].mapperType == ASC16SRAM8 || MyMedia[MEDIA_CART1].mapperType == XBLAM || 
+    if (MyMedia[MEDIA_CART1].mapperType == ASC16 || MyMedia[MEDIA_CART1].mapperType == ASC16SRAM2 || MyMedia[MEDIA_CART1].mapperType == ASC16SRAM8 || MyMedia[MEDIA_CART1].mapperType == XBLAM ||
         MyMedia[MEDIA_CART1].mapperType == SUPERLR || MyMedia[MEDIA_CART1].mapperType == XEVIOUS || MyMedia[MEDIA_CART1].mapperType == GENERIC_16K)
         return 1;
     else
@@ -1561,7 +1561,7 @@ void MSX_CartSetup(u8 media_id)
             MSXCartPtr[media_id][6] = (u8*)CART_Memory+0x0000;        // Segment 0 default
             MSXCartPtr[media_id][7] = (u8*)CART_Memory+0x0000;        // Segment 0 default
         }
-        else if (MyMedia[media_id].mapperType == KOEISRAM32)  // KOEI 32K SRAM similar to ASC8 with 'expanded' SRAM 
+        else if (MyMedia[media_id].mapperType == KOEISRAM32)  // KOEI 32K SRAM similar to ASC8 with 'expanded' SRAM
         {
             MSXCartPtr[media_id][0] = (u8*)CART_Memory+0x0000;        // Segment 0 default
             MSXCartPtr[media_id][1] = (u8*)CART_Memory+0x0000;        // Segment 0 default
@@ -1587,14 +1587,14 @@ void MSX_CartSetup(u8 media_id)
         {
             extern u8 matra_previoius_blocks[4];
             extern u8 matra_compilation_offset;
-            
+
             matra_previoius_blocks[0] = 0;
             matra_previoius_blocks[1] = 1;
             matra_previoius_blocks[2] = 2;
             matra_previoius_blocks[3] = 3;
-            
+
             matra_compilation_offset = 2;
-            
+
             MSXCartPtr[media_id][0] = (u8*)Unmapped_Memory;           // Segment Unmapped
             MSXCartPtr[media_id][1] = (u8*)Unmapped_Memory;           // Segment Unmapped
             MSXCartPtr[media_id][2] = (u8*)CART_Memory+0x0000;        // Segment 0
@@ -1756,7 +1756,7 @@ void MSX_InitialMemoryLayout(void)
         MSXCartPtr[MEDIA_CART2][5] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][6] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][7] = (u8*)Unmapped_Memory;           // Segment Unmapped
-        
+
         msxLoadSRAM();  // FM-PAC with MSX-MUSIC also has 8K of SRAM
     }
     if (myConfig.expansion == EXP_MEGARAM) // MEGARAM has both system RAM and SCC capable mapping
@@ -1805,7 +1805,7 @@ void MSX_InitialMemoryLayout(void)
     // If we are dealing with one of the rare SRAM games, read the SRAM file from the SD card back into memory.
     // We only allow this for CART1 - we will ignore any SRAM-based CART that is in slot 2...
     // ---------------------------------------------------------------------------------------------------------
-    if ((MyMedia[MEDIA_CART1].mapperType == ASC8SRAM2) || (MyMedia[MEDIA_CART1].mapperType == ASC8SRAM8) || (MyMedia[MEDIA_CART1].mapperType == ASC16SRAM2) || 
+    if ((MyMedia[MEDIA_CART1].mapperType == ASC8SRAM2) || (MyMedia[MEDIA_CART1].mapperType == ASC8SRAM8) || (MyMedia[MEDIA_CART1].mapperType == ASC16SRAM2) ||
         (MyMedia[MEDIA_CART1].mapperType == ASC16SRAM8) || (MyMedia[MEDIA_CART1].mapperType == GAME_MASTER2) || (MyMedia[MEDIA_CART1].mapperType == KOEISRAM32))
     {
         msxLoadSRAM();

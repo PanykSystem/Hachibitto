@@ -84,7 +84,7 @@ struct __attribute__((__packed__)) Config_t
     u8  maskBorders;
     u8  frameSkip;
     u8  ymScale;
-    u8  reserved0;
+    u8  overscan;
     u8  reserved1;
     u8  reserved2;
     u8  reserved3;
@@ -94,7 +94,7 @@ struct __attribute__((__packed__)) Config_t
     u8  reserved7;
 };
 
-#define COMPRESS_BUFFER ((u8 *)(ROM_Memory + (MAX_CART_SIZE_KB * 1024) - (300 * 1024)))   // We use the back-end 256K of the ROM buffer for compression
+#define COMPRESS_BUFFER ((u8 *)(ROM_Memory + (MAX_CART_SIZE_KB * 1024) - (256 * 1024)))   // We use the back-end 256K of the ROM buffer for compression
 
 #define NORAM                       0xFF    // When reading IO that is unmapped... we just return 0xFF
 
@@ -102,11 +102,11 @@ struct __attribute__((__packed__)) Config_t
 #define MACHINE_MSX1                0x01    // Standard MSX1 slot layout (nothing expanded, RAM in Slot 2)
 
 #define EXP_NONE                    0       // No special expansion
-#define EXP_FM_PAC                  1       // MSX-MUSIC (YM)
+#define EXP_FM_PAC                  1       // FM PAC / MSX-MUSIC
 #define EXP_SCC_PLUS                2       // SCC-I / SCC+
 #define EXP_2XPSG                   3       // 2x PSG Mode
 #define EXP_BEEPER                  4       // Beeper Active (yeah, not really an expansion but...)
-#define EXP_MEGARAM                 5       // MegaRAM SCC 512K
+#define EXP_MEGARAM                 5       // MegaRAM SCC 512K/1MB
 
 #define FS_NONE                     0       // No Frame Skip
 #define FS_LIGHT                    1       // Light Frame Skip
@@ -184,6 +184,7 @@ extern u8 zanac_glitch_patch;
 #define MEGA_SCC        34  // For our special MEGARAM SCC 'Cart'
 #define FMPAC_SRAM      35  // For our special FM-PAC 'Cart'
 #define SCCPLUS_RAM     36  // For our special SCC+ 'Cart'
+#define END_MAPPERS     37
 
 #define MAX_GUESS_MAPPER 8   // The highest guess we can guess when examining ROM data
 
