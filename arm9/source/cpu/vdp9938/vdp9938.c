@@ -821,7 +821,7 @@ static inline u8 Screen8SpriteByte(const u8 *base, int offset)
         return VDP_Memory[VDP9938Screen8Address(address)];
 }
 
-ITCM_CODE u8 DoesScreen8LineHaveSprites(uint8_t Y)
+u8 DoesScreen8LineHaveSprites(uint8_t Y)
 {
     static const uint8_t SprHeights[4] = { 8,16,16,32 };
     uint8_t IH,OH;

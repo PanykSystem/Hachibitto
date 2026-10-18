@@ -20,9 +20,11 @@
 //    - Two operators are synthesized per channel: the modulator changes the
 //      carrier's phase, with simplified feedback and TL-derived modulation.
 //    - MUL, TL, FB and AR/DR/SL/RR contribute to the model; block/KSR affect
-//      the approximate envelope-rate calculation. KSL, AM, VIB, DC/DM and
-//      EG-TYP are decoded but are not modeled (every note holds at its
-//      sustain level while the key is down).
+//      the approximate envelope-rate calculation. KSL, AM, VIB and EG-TYP are
+//      decoded but not modeled (every note holds at its sustain level while
+//      the key is down). Custom patches honor DC/DM waveform selection using
+//      full- or half-sine operator waveforms; preset waveform behavior is
+//      unchanged.
 //    - Envelopes are 32-bit fixed point (16.16) and advance once every 4th
 //      output sample to save CPU. Decay and release speeds follow the
 //      hardware's exponential rate scaling (speed doubles with each rate
@@ -31,7 +33,8 @@
 //      YM_RATE_BASE is tuned by ear to compensate. Attack is a simpler
 //      approximation and is not hardware-accurate.
 //    - Sustain levels (SL) use a table matching the OPLL's 3 dB steps.
-//      The carrier waveform is a soft-square lookup, not the true sine.
+//      Preset carriers use a soft-square lookup; custom carriers use the
+//      selected sine waveform.
 //
 //  Current rhythm synthesis (shared in concept, with separate mixer code):
 //    - Bass Drum and Tom-Tom use tonal oscillators.
@@ -85,7 +88,7 @@ typedef struct
     u8 ksrMod, ksrCar;             // $00/$01 D4 - used by approximate FM rate calculation
     u8 kslMod, kslCar;             // $02/$03 D7-6 - decoded; KSL not currently applied
     u8 tl;                         // $02 D5-0 - modulator total level, used by FM path
-    u8 dm, dc;                     // $03 D3,D4 - decoded rhythm-related bits; not fully modeled
+    u8 dm, dc;                     // $03 D3,D4 - modulator/carrier waveform select
     u8 fb;                         // $03 D2-0 - feedback amount used by FM path
     u8 arMod, drMod, slMod, rrMod; // $04/$06 - modulator envelope parameters (approximate)
     u8 arCar, drCar, slCar, rrCar; // $05/$07 - carrier envelope parameters (approximate)

@@ -32,7 +32,7 @@
 #define YM_MASTER_CLOCK            3579545   // MSX standard clock, same as SCC's
 #define YM_SIN_SHIFT               24        // phase>>24 -> 8-bit (256 entry) table index
 #define YM_GAIN_RAMP_STEP          16        // Gain ramp toward full level on key-on.
-#define YM_PERCUSSION_RELEASE_STEP 7750      // PERCUSSION release rate: higher = faster decay
+#define YM_PERCUSSION_RELEASE_STEP 7780      // PERCUSSION release rate: higher = faster decay
                                              // for more distinct drum hits.
 
 /* FM envelope: 32-bit fixed point, 16 fractional bits.
@@ -153,6 +153,7 @@ typedef struct
     u8  modDepth;      // TL-derived phase-deviation scale (see YM_PrecomputeFMRates)
     u8  fbDepth;       // YM_FM_FBDepth[FB]
     u8  volume;        // 15 - channel volume
+    u8  waveMod, waveCar; // Custom waveform modes; 0=legacy/default, 1=sine, 2=half-sine
     u32 drMod, rrMod;  // decay/release per-sample envelope steps (16.16 fixed)
     u32 drCar, rrCar;
     u32 slMod, slCar;  // sustain target levels, already << 16
@@ -541,6 +542,8 @@ static inline void YM_PrecomputeFMRates(YM *chip, int ch)
 
     p->fbDepth = YM_FM_FBDepth[inst->fb & 7];
     p->volume = YM_SustainGain[chip->channels[ch].volume & 0x0F];   /* 3 dB/step like the OPLL */
+    p->waveMod = chip->channels[ch].instrument == 0 && inst->dm;
+    p->waveCar = chip->channels[ch].instrument == 0 ? (inst->dc ? 2 : 1) : 0;
 }
 
 /* One operator's envelope, advanced one output sample.
@@ -651,6 +654,8 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     osc->phase += osc->phaseIncrement;
 
     s32 mod = YM_CarrierSineTable[(osc->modPhase >> YM_SIN_SHIFT) & 0xFF];
+    if (p->waveMod && mod < 0)
+        mod = 0;
     s32 modGain = 255 - (s32)(osc->modEnv >> 16);
     mod = (mod * modGain) >> 8;
 
@@ -670,7 +675,17 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     s32 modIndex = (mod * p->modDepth) >> 8;
 
     u32 carrierIndex = ((osc->phase >> YM_SIN_SHIFT) + modIndex) & 0xFF;
-    s32 carrier = YM_SinTable[carrierIndex];
+    s32 carrier;
+    if (p->waveCar == 0)
+    {
+        carrier = YM_SinTable[carrierIndex];
+    }
+    else
+    {
+        carrier = YM_CarrierSineTable[carrierIndex];
+        if (p->waveCar == 2 && carrier < 0)
+            carrier = 0;
+    }
 
     // Carrier envelope followed by channel volume attenuation.
     carrier = (carrier * (255 - (s32)(osc->carEnv >> 16))) >> 7;
