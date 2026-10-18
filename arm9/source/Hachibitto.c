@@ -372,15 +372,16 @@ mm_word ClickRemoval(mm_word len, mm_addr dest)
     s16 mix2[16];
 
     ay38910Mixer(16, mix1, &myAY);  // Mix AY and give us something to move towards
+    
     if (msx_music_capable_game)
     {
         YMMixer(len-16, dest, &myYM); // Keep the YM stepping normally
-        YMMixer(16, mix1, &myYM); // Mix directly on top of AY
+        YMMixer(16, mix1, &myYM);     // Mix directly on top of AY
     }
     else if (msx_scc_capable_game)
     {
-        SCCMixer(16, mix2, &mySCC);  // Get SCC samples
-        s32 sample = mix1[15] + mix2[15];
+        SCCMixer(16, mix2, &mySCC);         // Get SCC samples
+        s32 sample = mix1[15] + mix2[15];   // And mix them together...
         if (sample > 32767) sample = 32767;
         if (sample < -32767) sample = -32767;
         mix1[15] = sample;
@@ -391,8 +392,8 @@ mm_word ClickRemoval(mm_word len, mm_addr dest)
     s16 *p = (s16*)dest;
     for (int i=0; i<len; i++)
     {
-        if (last_sample < (target-32)) last_sample += 8;
-        if (last_sample > (target+32)) last_sample -= 8;
+        if (last_sample < (target-16)) last_sample += 8;
+        if (last_sample > (target+16)) last_sample -= 8;
         *p++ = last_sample;
     }
 

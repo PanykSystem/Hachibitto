@@ -20,10 +20,18 @@
 //    - Two operators are synthesized per channel: the modulator changes the
 //      carrier's phase, with simplified feedback and TL-derived modulation.
 //    - MUL, TL, FB and AR/DR/SL/RR contribute to the model; block/KSR affect
-//      the approximate envelope-rate calculation. KSL, AM, VIB and EG-TYP are
-//      decoded but are not currently fully modeled.
-//    - The envelope generators are simplified approximations, not the OPLL's
-//      hardware rate tables or exact logarithmic envelope behavior.
+//      the approximate envelope-rate calculation. KSL, AM, VIB, DC/DM and
+//      EG-TYP are decoded but are not modeled (every note holds at its
+//      sustain level while the key is down).
+//    - Envelopes are 32-bit fixed point (16.16) and advance once every 4th
+//      output sample to save CPU. Decay and release speeds follow the
+//      hardware's exponential rate scaling (speed doubles with each rate
+//      step, rate 0 never decays, release always terminates). The ramp is
+//      LINEAR in amplitude rather than the OPLL's logarithmic (dB) curve, so
+//      YM_RATE_BASE is tuned by ear to compensate. Attack is a simpler
+//      approximation and is not hardware-accurate.
+//    - Sustain levels (SL) use a table matching the OPLL's 3 dB steps.
+//      The carrier waveform is a soft-square lookup, not the true sine.
 //
 //  Current rhythm synthesis (shared in concept, with separate mixer code):
 //    - Bass Drum and Tom-Tom use tonal oscillators.
@@ -35,8 +43,7 @@
 //  equivalence with a hardware OPLL. Performance measurements belong in notes.
 //
 //
-//  Register map (verified against the Yamaha OPLL Application Manual,
-//  not reconstructed from memory - see chat for the source):
+//  Register map (verified against the Yamaha OPLL Application Manual):
 //    $00/$01   mod/car: AM(D7) VIB(D6) EG-TYP(D5) KSR(D4) MUL(D3-0)
 //    $02       mod:     KSL(D7-6) TL(D5-0)
 //    $03       car:     KSL(D7-6) DC(D4) DM(D3) FB(D2-0)
@@ -103,11 +110,9 @@ typedef struct
     u8  gain;
 
     /* Melodic two-operator FM runtime state. */
-    u8  modEnv;
-    u8  carEnv;
-    u8  modState;
-    u8  carState;
-    s16 feedback;
+    u32 modEnv, carEnv;     // 0 = full level, YM_ENV_SILENT = silent (was u8)
+    u8  modState, carState;
+    s16 feedback;    
 } YM_Oscillator;
 
 //@----------------------------------------------------------------------------

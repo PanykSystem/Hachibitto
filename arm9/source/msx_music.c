@@ -16,7 +16,7 @@
 //  attack/decay/sustain/release states. This is not a cycle-accurate OPLL core.
 //
 //  Please note: this file was largely generated with Claude.AI and ChatGPT with a lot
-//  of patience (and frustration) by the author. Sound drivers are not my specialty...
+//  of patience (and frustration) by the developer. Sound drivers are not my specialty...
 //  in fact, we are not really on speaking terms. So if you happen to understand basic
 //  sound sampling principles and can figure out FM Synthesis and want to help improve
 //  this - please be my guest!
@@ -32,8 +32,24 @@
 #define YM_MASTER_CLOCK            3579545   // MSX standard clock, same as SCC's
 #define YM_SIN_SHIFT               24        // phase>>24 -> 8-bit (256 entry) table index
 #define YM_GAIN_RAMP_STEP          16        // Gain ramp toward full level on key-on.
-#define YM_PERCUSSION_RELEASE_STEP 6300      // PERCUSSION release rate: higher = faster decay
+#define YM_PERCUSSION_RELEASE_STEP 7750      // PERCUSSION release rate: higher = faster decay
                                              // for more distinct drum hits.
+
+/* FM envelope: 32-bit fixed point, 16 fractional bits.
+   0 = full level, YM_ENV_SILENT = silent.  Amplitude = 255 - (env >> 16). */
+#define YM_ENV_SILENT              (255u << 16)
+
+/* Decay/release speed. Per-sample envelope step for rate R (1..15) is
+   YM_RATE_BASE << (R-1): speed doubles with every rate step like the real OPLL.
+   170 gives ~3.2s full-scale at R=1, ~25ms at R=8, ~1.5ms at R=12
+   is a LINEAR amplitude ramp, so it needs to run much faster than the real
+   chip's dB-domain times to sound the same. Tune by ear. */
+#define YM_RATE_BASE               170u
+
+/* The envelopes are only advanced once every (1 << YM_ENV_DIV_SHIFT) output
+   samples (all steps are scaled up to compensate).  Saves a lot of CPU and
+   is inaudible at these rates. 2 = every 4th sample (~7.7 kHz). */
+#define YM_ENV_DIV_SHIFT           2
 
 /* Linear amplitude factors for the OPLL's 3 dB-per-step channel volume. */
 static   u8 YM_SustainGain[16] __attribute__((section(".dtcm"))) =
@@ -132,17 +148,19 @@ YM_Instrument YM_InstrumentROM[16] __attribute__((section(".dtcm"))) =
    volume-derived values are calculated when the channel configuration changes. */
 typedef struct
 {
-    u8 arMod, drMod, rrMod;
-    u8 arCar, drCar, rrCar;
-    u8 modAtten;       // TL-derived linear amplitude factor from YM_TLAtten[]
-    u8 modDepth;       // TL-derived phase-deviation scale (see YM_PrecomputeFMRates)
-    u8 fbDepth;        // YM_FM_FBDepth[FB]
-    u8 slMod;          // sustain attenuation target
-    u8 slCar;
-    u8 volume;         // 15 - channel volume
+    u8  arMod, arCar;  // attack: small per-sample step (<< 16 when applied)
+    u8  modAtten;      // TL-derived linear amplitude factor from YM_TLAtten[]
+    u8  modDepth;      // TL-derived phase-deviation scale (see YM_PrecomputeFMRates)
+    u8  fbDepth;       // YM_FM_FBDepth[FB]
+    u8  volume;        // 15 - channel volume
+    u32 drMod, rrMod;  // decay/release per-sample envelope steps (16.16 fixed)
+    u32 drCar, rrCar;
+    u32 slMod, slCar;  // sustain target levels, already << 16
+    u32 susMod, susCar;// extra decay while key held: 0 = hold (EG-TYP=1), else RR step (EG-TYP=0)
 } YM_FMParams;
 
 static YM_FMParams YM_FM[YM_NUM_CHANNELS] __attribute__((section(".dtcm")));
+static u8 YM_EnvDiv __attribute__((section(".dtcm")));   // envelope clock divider counter
 
 // This should be roughly 0.75dB per step... approx.
 static u8 YM_TLAtten[64] __attribute__((section(".dtcm"))) = {
@@ -454,6 +472,7 @@ static   u8 YM_FM_FBDepth[8] __attribute__((section(".dtcm"))) =
     0, 2, 4, 8, 16, 32, 64, 96
 };
 
+/* Attack still uses the old small per-sample step (applied << 16). */
 static inline u8 YM_FMRateStepPrecompute(u8 rate, u8 block, u8 ksr)
 {
     u32 r = rate & 0x0F;
@@ -468,19 +487,47 @@ static inline u8 YM_FMRateStepPrecompute(u8 rate, u8 block, u8 ksr)
     return (u8)(1 + (r * r >> 3));
 }
 
+/* Decay/release step: exponential in the rate nibble (speed doubles per step),
+   16.16 fixed point per output sample.  Rate 0 = frozen (real OPLL behavior)
+   unless mustMove is set (release must always terminate so the channel can
+   go inactive). */
+static inline u32 YM_FMRateInc(u8 rate, u8 block, u8 ksr, int mustMove)
+{
+    u32 r = rate & 0x0F;
+    if (r == 0)
+    {
+        if (!mustMove) return 0;
+        r = 1;
+    }
+    r += ksr ? (block >> 1) : (block >> 2);
+    if (r > 15) r = 15;
+    return (YM_RATE_BASE << (r - 1)) << YM_ENV_DIV_SHIFT;   // per envelope update
+}
+
 static inline void YM_PrecomputeFMRates(YM *chip, int ch)
 {
     const YM_Instrument *inst = chip->channels[ch].instPtr;
     u8 block = chip->channels[ch].block;
     YM_FMParams *p = &YM_FM[ch];
+
     p->arMod = YM_FMRateStepPrecompute(inst->arMod, block, inst->ksrMod);
-    p->drMod = YM_FMRateStepPrecompute(inst->drMod, block, inst->ksrMod);
-     /* Release is currently advanced once per output sample. Halve the
-         attenuation step so fast preset release rates leave a longer tail. */
-    p->rrMod = (YM_FMRateStepPrecompute(inst->rrMod, block, inst->ksrMod) + 1) >> 1;
     p->arCar = YM_FMRateStepPrecompute(inst->arCar, block, inst->ksrCar);
-    p->drCar = YM_FMRateStepPrecompute(inst->drCar, block, inst->ksrCar);
-    p->rrCar = (YM_FMRateStepPrecompute(inst->rrCar, block, inst->ksrCar) + 1) >> 1;
+
+    p->drMod = YM_FMRateInc(inst->drMod, block, inst->ksrMod, 0);
+    p->rrMod = YM_FMRateInc(inst->rrMod, block, inst->ksrMod, 1);
+    p->drCar = YM_FMRateInc(inst->drCar, block, inst->ksrCar, 0);
+    p->rrCar = YM_FMRateInc(inst->rrCar, block, inst->ksrCar, 1);
+
+    p->slMod = (u32)YM_FM_SustainAtten[inst->slMod & 0x0F] << 16;
+    p->slCar = (u32)YM_FM_SustainAtten[inst->slCar & 0x0F] << 16;
+
+    /* Percussive (EG-TYP=0) sustain decay is OFF: every note holds at its
+       sustain level while the key is down. To experiment, use:
+           p->susMod = inst->egTypeMod ? 0 : p->rrMod;
+           p->susCar = inst->egTypeCar ? 0 : p->rrCar;                       */
+    p->susMod = 0;
+    p->susCar = 0;
+
     /* YM2413 TL is 0.75 dB per step, not a linear 4/step attenuation.
        Precompute the corresponding linear amplitude factor.  This is
        particularly important for patches with a heavily attenuated
@@ -493,167 +540,118 @@ static inline void YM_PrecomputeFMRates(YM *chip, int ch)
     p->modDepth = (u8)(8 + ((63 - (inst->tl & 0x3F)) >> 1));
 
     p->fbDepth = YM_FM_FBDepth[inst->fb & 7];
-    p->slMod = YM_FM_SustainAtten[inst->slMod & 0x0F];
-    p->slCar = YM_FM_SustainAtten[inst->slCar & 0x0F];
     p->volume = YM_SustainGain[chip->channels[ch].volume & 0x0F];   /* 3 dB/step like the OPLL */
 }
 
-ITCM_CODE static inline void YM_FMEnvelopeStep(
-    YM_Oscillator *osc, u8 *env, u8 *state, u8 keyOn,
-    u8 arStep, u8 drStep, u8 sl, u8 rrStep)
+/* One operator's envelope, advanced one output sample.
+   keyEdge = fresh key-on this sample (computed once by the caller so both
+   operators restart together). */
+ITCM_CODE static inline void YM_EnvStep(
+    u32 *env, u8 *state, u8 keyOn, u8 keyEdge,
+    u8 arStep, u32 drInc, u32 slTarget, u32 susInc, u32 rrInc)
 {
-    if (keyOn && !osc->previousKeyOn)
+    if (keyEdge)
     {
-        *env = 255;
+        *env = YM_ENV_SILENT;
         *state = YM_FM_ENV_ATTACK;
     }
-    else if (!keyOn && osc->previousKeyOn)
+    else if (!keyOn)
     {
         *state = YM_FM_ENV_RELEASE;
     }
 
-    if (keyOn)
-    {
-        if (*state == YM_FM_ENV_ATTACK)
-        {
-            u8 step = arStep;
-            if (step >= *env)
-            {
-                *env = 0;
-                *state = YM_FM_ENV_DECAY;
-            }
-            else
-            {
-                // Faster as the envelope approaches zero, like a log-domain EG.
-                u16 delta = step + ((255 - *env) >> 5);
-                *env = (delta >= *env) ? 0 : (u8)(*env - delta);
-            }
-        }
-        else if (*state == YM_FM_ENV_DECAY)
-        {
-            u8 target = sl;
-            u8 step = drStep;
-            u16 e = *env + step;
+    /* Ordered by how often each state is hit. No switch: the ARM9 has no
+       branch predictor and a jump table is slow. */
+    u8 st = *state;
 
-            if (e >= target)
-            {
-                *env = target;
-                *state = YM_FM_ENV_SUSTAIN;
-            }
-            else
-            {
-                *env = (u8)e;
-            }
-        }
-        else if (*state == YM_FM_ENV_SUSTAIN)
+    if (st == YM_FM_ENV_SUSTAIN)
+    {
+        // Hold at the sustain level while the key is down (susInc is 0),
+        // or keep decaying for percussive (EG-TYP=0) instruments.
+        if (susInc)
         {
-            // Hold the operator at its sustain level while the key is down.
-            // The previous approximation continued changing the envelope here,
-            // which caused audible level/timbre "waffling" on sustained notes.
+            u32 e = *env + susInc;
+            *env = (e > YM_ENV_SILENT) ? YM_ENV_SILENT : e;
         }
     }
-    else if (*state == YM_FM_ENV_RELEASE)
+    else if (st == YM_FM_ENV_RELEASE)
     {
-        u8 step = rrStep;
-        u16 e = *env + step;
-        *env = (e >= 255) ? 255 : (u8)e;
+        u32 e = *env + rrInc;
+        *env = (e > YM_ENV_SILENT) ? YM_ENV_SILENT : e;
     }
-
-    osc->previousKeyOn = keyOn;
+    else if (st == YM_FM_ENV_DECAY)
+    {
+        u32 e = *env + drInc;
+        if (e >= slTarget)
+        {
+            e = slTarget;
+            *state = YM_FM_ENV_SUSTAIN;
+        }
+        *env = e;
+    }
+    else // YM_FM_ENV_ATTACK
+    {
+        // Faster as the envelope approaches zero, like a log-domain EG.
+        // (scaled for the divided envelope clock)
+        u32 e = *env;
+        u32 delta = ((u32)arStep << (16 + YM_ENV_DIV_SHIFT)) +
+                    ((YM_ENV_SILENT - e) >> (5 - YM_ENV_DIV_SHIFT));
+        if (delta >= e)
+        {
+            e = 0;
+            *state = YM_FM_ENV_DECAY;
+        }
+        else
+        {
+            e -= delta;
+        }
+        *env = e;
+    }
 }
 
-ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, int ch)
+ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, int ch, u8 doEnv)
 {
-      YM_FMParams *p = &YM_FM[ch];
-    u8 keyTransition = (keyOn && !osc->previousKeyOn);
+    YM_FMParams *p = &YM_FM[ch];
+    u8 keyEdge = (keyOn && !osc->previousKeyOn);
 
-    /* The normal mixer still uses gain as the cheap channel-active flag.
-       Keep it synchronized with the new two-operator envelope so a released
-       voice can actually disappear from the mix. */
-    if (keyTransition)
-        osc->gain = 255;
-
-    YM_FMEnvelopeStep(osc, &osc->modEnv, &osc->modState, keyOn,
-                      p->arMod, p->drMod, p->slMod, p->rrMod);
-
-    // Use a separate carrier envelope state while sharing the oscillator's
-    // previous-key flag only as the channel gate.
-    // The two state machines are intentionally advanced from the same key event.
-    // The modulator call updated previousKeyOn. Use the saved transition for
-    // the carrier so both operators restart together on every key-on.
-    if (keyTransition)
+    if (keyEdge)
     {
-        osc->carEnv = 255;
-        osc->carState = YM_FM_ENV_ATTACK;
         osc->phase = 0;
         osc->modPhase = 0;
         osc->feedback = 0;
     }
-    else if (!keyOn && osc->carState != YM_FM_ENV_RELEASE)
+
+    /* Envelopes advance on the divided clock, but a key-on edge is always
+       handled immediately so notes start on time. A key-off is picked up on
+       the next envelope tick. Both operators restart together. */
+    if (doEnv | keyEdge)
     {
-        osc->carState = YM_FM_ENV_RELEASE;
+        YM_EnvStep(&osc->modEnv, &osc->modState, keyOn, keyEdge,
+                   p->arMod, p->drMod, p->slMod, p->susMod, p->rrMod);
+        YM_EnvStep(&osc->carEnv, &osc->carState, keyOn, keyEdge,
+                   p->arCar, p->drCar, p->slCar, p->susCar, p->rrCar);
     }
 
-    if (keyOn)
-    {
-        if (osc->carState == YM_FM_ENV_ATTACK)
-        {
-            u8 step = p->arCar;
-            if (step >= osc->carEnv)
-            {
-                osc->carEnv = 0;
-                osc->carState = YM_FM_ENV_DECAY;
-            }
-            else
-            {
-                u16 delta = step + ((255 - osc->carEnv) >> 5);
-                osc->carEnv = (delta >= osc->carEnv) ? 0 : (u8)(osc->carEnv - delta);
-            }
-        }
-        else if (osc->carState == YM_FM_ENV_DECAY)
-        {
-            u8 target = p->slCar;
-            u8 step = p->drCar;
-            u16 e = osc->carEnv + step;
-            if (e >= target)
-            {
-                osc->carEnv = target;
-                osc->carState = YM_FM_ENV_SUSTAIN;
-            }
-            else
-                osc->carEnv = (u8)e;
-        }
-        else if (osc->carState == YM_FM_ENV_SUSTAIN)
-        {
-            // Hold the carrier at its sustain level while the key is down.
-            // Do not artificially ramp it here; that was the source of the
-            // audible volume/timbre wavering in sustained notes.
-        }
-    }
-    else if (osc->carState == YM_FM_ENV_RELEASE)
-    {
-        u8 step = p->rrCar;
-        u16 e = osc->carEnv + step;
-        osc->carEnv = (e >= 255) ? 255 : (u8)e;
-    }
+    osc->previousKeyOn = keyOn;
 
-    if (osc->modEnv == 255 && osc->carEnv == 255)
+    /* The carrier alone decides audibility. When it reaches silence the
+       channel goes inactive, which lets YMMixer() stop visiting it. (The
+       modulator is not checked: some presets have RR=0 on the modulator.) */
+    if (osc->carEnv >= YM_ENV_SILENT)
     {
-        /* Both operators have reached true release/silence.  This is also
-           what allows YMMixer() to stop visiting the channel. */
         osc->gain = 0;
         return 0;
     }
 
-    /* While a released voice is still audible, keep the active flag
-       asserted.  It is deliberately not used for amplitude here. */
+    /* While the voice is audible, keep the active flag asserted.  It is
+       deliberately not used for amplitude here. */
     osc->gain = 255;
 
     osc->modPhase += osc->modPhaseIncrement;
     osc->phase += osc->phaseIncrement;
 
     s32 mod = YM_CarrierSineTable[(osc->modPhase >> YM_SIN_SHIFT) & 0xFF];
-    s32 modGain = 255 - osc->modEnv;
+    s32 modGain = 255 - (s32)(osc->modEnv >> 16);
     mod = (mod * modGain) >> 8;
 
     // TL-derived modulator attenuation, feedback depth and FM deviation are
@@ -675,7 +673,7 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     s32 carrier = YM_SinTable[carrierIndex];
 
     // Carrier envelope followed by channel volume attenuation.
-    carrier = (carrier * (255 - osc->carEnv)) >> 7;
+    carrier = (carrier * (255 - (s32)(osc->carEnv >> 16))) >> 7;
     carrier = (carrier * p->volume) >> 7;
 
     // Apply the configured YM output level after channel-volume attenuation.
@@ -700,6 +698,9 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
     {
         s32 sample = 0;
 
+        /* Envelope clock divider (persists across calls, not part of save state). */
+        u8 doEnv = ((++YM_EnvDiv) & ((1 << YM_ENV_DIV_SHIFT) - 1)) == 0;
+
         /* Melodic 2-op FM */
         for (int ch = 0; ch < lastMelodic; ch++)
         {
@@ -711,7 +712,8 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
             sample += YM_RenderChannel2FM(
                 &cc->osc,
                 cc->keyOn,
-                ch
+                ch,
+                doEnv
             );
         }
 
