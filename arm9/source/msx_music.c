@@ -692,7 +692,7 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     carrier = (carrier * p->volume) >> 7;
 
     // Apply the configured YM output level after channel-volume attenuation.
-    return carrier << myConfig.ymScale;
+    return carrier << (myConfig.ymScale+1);
 }
 
 // -------------------------------------------------------------------------
@@ -914,8 +914,8 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
         s32 mixed = ((s32)dest[i] + 32767) + sample;
 
         // Clamp final mixed result...
-        if (mixed > 32767) mixed = 32767;
-        else if (mixed < -32768) mixed = -32768;
+        if (mixed > 32767) {mixed = 32767;}
+        else if (mixed < -32768) {mixed = -32768;}
 
         dest[i] = (s16)mixed;
     }

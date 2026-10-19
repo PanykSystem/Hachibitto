@@ -1744,10 +1744,7 @@ void ShowLoading(void)
     dmaFillWords(dmaVal | (dmaVal<<16),(void*) bgGetMapPtr(bg1b),32*24*2);
 }
 
-/*********************************************************************************
- * Init DS Emulator - setup VRAM banks and background screen rendering banks
- ********************************************************************************/
-void HachibittoInit(void)
+void restore_lcd(void)
 {
     //  Init graphic mode (bitmap mode)
     videoSetMode(MODE_0_2D  | DISPLAY_BG0_ACTIVE | DISPLAY_BG1_ACTIVE | DISPLAY_SPR_1D_LAYOUT | DISPLAY_SPR_ACTIVE);
@@ -1759,6 +1756,8 @@ void HachibittoInit(void)
     //  Stop blending effect of intro
     REG_BLDCNT=0; REG_BLDCNT_SUB=0; REG_BLDY=0; REG_BLDY_SUB=0;
 
+    swiWaitForVBlank();
+    
     //  Render the top screen
     bg0 = bgInit(0, BgType_Text8bpp,  BgSize_T_256x512, 31,0);
     bg1 = bgInit(1, BgType_Text8bpp,  BgSize_T_256x512, 29,0);
@@ -1768,7 +1767,15 @@ void HachibittoInit(void)
     dmaCopy((void*) topscreenPal,(void*)  BG_PALETTE,256*2);
     unsigned  short dmaVal =*(bgGetMapPtr(bg0)+51*32);
     dmaFillWords(dmaVal | (dmaVal<<16),(void*)  bgGetMapPtr(bg1),32*24*2);
+}
 
+/*********************************************************************************
+ * Init DS Emulator - setup VRAM banks and background screen rendering banks
+ ********************************************************************************/
+void HachibittoInit(void)
+{
+    restore_lcd();
+    
     // Clear out media bays
     memset(MyMedia, 0x00, sizeof(MyMedia));
 

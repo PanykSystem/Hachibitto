@@ -21,6 +21,7 @@
 #include "MSX_generic.h"
 #include "options.h"
 #include "topscreen.h"
+#include "boxart.h"
 #include "lzav.h"
 #include "CRC32.h"
 #include "printf.h"
@@ -762,12 +763,26 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
           DSPrint(1,6+romSelected,2,szName);
         }
       }
+      
       ShowRandomPreviewSnaps();
+#if 0
+      static int last_game_highlighted=0;
+      if (last_game_highlighted != ucGameAct)
+      {
+        BoxArt_ShowPNG((ucGameAct & 1) ? "yyy.png" : "yyy.png");
+        last_game_highlighted=ucGameAct;
+      }
+#endif      
       swiWaitForVBlank();
     }
 
     // Wait for key to be released before returning
     while ((keysCurrent() & (KEY_TOUCH | KEY_START | KEY_SELECT | KEY_A | KEY_B | KEY_R | KEY_L | KEY_UP | KEY_DOWN))!=0);
+    
+#if 0   
+    extern void restore_lcd(void);
+    restore_lcd();
+#endif
 
     return 0x01;
 }
@@ -1218,7 +1233,7 @@ const struct options_t Option_Table[2][20] =
         {"SCREEN SCALE",   {"NONE", "COMPRESSED"},                                                                                                                              &myConfig.scaleScreen,      2},
         {"BORDER MASK",    {"NONE", "LEFT", "RIGHT", "LEFT + RIGHT"},                                                                                                           &myConfig.maskBorders,      4},
         {"FRAMESKIP",      {"NONE", "LIGHT", "AGGRESSIVE"},                                                                                                                     &myConfig.frameSkip,        3},
-        {"YM BALANCE",     {"OFF", "LOW", "MEDIUM", "HIGH"},                                                                                                                    &myConfig.ymScale,          4},
+        {"YM BALANCE",     {"LOW", "MEDIUM", "HIGH", "MAX"},                                                                                                                    &myConfig.ymScale,          4},
         {"VDP OVERSCAN",   {"OFF", "ENABLED"},                                                                                                                                  &myConfig.overscan,         2},
         {"Y OFFSET",       {"None", "+1","+2","+3","+4","+5","+6","+7","+8","+9","+10","+11","+12","+13","+14","+15","+16","+17","+18","+19","+20","+21","+22","+23","+24",
                                     "+25","+26","+27","+28","+29","+30","+31","+32"},                                                                                           &myConfig.yOffset,          33},

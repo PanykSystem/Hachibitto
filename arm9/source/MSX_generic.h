@@ -112,9 +112,10 @@ struct __attribute__((__packed__)) Config_t
 #define FS_LIGHT                    1       // Light Frame Skip
 #define FS_AGGRESSIVE               2       // Aggressive Frame Skip
 
-#define YM_BAL_LOW                  1       // Low YM volume mix
-#define YM_BAL_MED                  2       // Medium YM volume mix
-#define YM_BAL_HIGH                 3       // High (normal) YM volume mix
+#define YM_BAL_LOW                  0       // Low YM volume mix
+#define YM_BAL_MED                  1       // Medium YM volume mix
+#define YM_BAL_HIGH                 2       // High YM volume mix
+#define YM_BAL_MAX                  3       // Max (normal) YM volume mix
 
 extern struct Config_t       myConfig;
 extern struct GlobalConfig_t myGlobalConfig;
