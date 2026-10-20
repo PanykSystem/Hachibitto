@@ -81,6 +81,7 @@ u8 RAM_Memory[0x40000]          ALIGN(32) = {0};        // RAM is 256K for the M
 u8 BIOS_Memory[0x8000]          ALIGN(32) = {0};        // To hold our MSX BIOS - always in the lower 32K memory region of slot 0
 u8 SRAM_Memory[0x8000]          ALIGN(32) = {0};        // To hold up to 32K of SRAM (FM-PAC, Game Master 2, or special SRAM capable carts)
 u8 *SCC_Memory = RAM_Memory+0x30000;                    // To hold the 64K of SCC-backed RAM we simply use the last 64K of RAM (anything using SCC+ cart won't need that)
+u8 *BoxArtBuffer = NULL;                                // Used to store the Box Art for display (only the DSi allocates memory for this)
 
 u8 io_show_status = 0;      // Used to indicate a disk activity icons
 u8 sram_show_status = 0;    // Used to show SRAM icon for SRAM-based carts
@@ -2040,6 +2041,7 @@ int main(int argc, char **argv)
     {
         MAX_CART_SIZE_KB = 4096; // 4MB is the max MSX cart size without tom-foolery
         ROM_Memory = malloc(MAX_CART_SIZE_KB * 1024);
+        BoxArtBuffer = malloc(512 * 1024);
     }
     else // For older DS units... 1MB max
     {

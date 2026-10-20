@@ -520,6 +520,12 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
     bool bDone=false;
     u16 ucHaut=0x00, ucBas=0x00,ucSHaut=0x00, ucSBas=0x00, romSelected= 0, firstRomDisplay=0,nbRomPerPage, uNbRSPage;
     s16 uLenFic=0, ucFlip=0, ucFlop=0;
+    int last_show_y_offset = 0;
+    int last_game_highlighted=-1;
+    int direction = 1;
+    int dampen = 0;
+    int dwell = 60;
+    u8 bShowPreviewSnaps = 1;
 
     // Show the menu...
     while ((keysCurrent() & (KEY_TOUCH | KEY_START | KEY_SELECT | KEY_A | KEY_B))!=0);
@@ -697,7 +703,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
       // -------------------------------------------------------------------
       // Any of these keys will pick the current ROM and try to load it...
       // -------------------------------------------------------------------
-      if (keysCurrent() & KEY_A || keysCurrent() & KEY_Y || keysCurrent() & KEY_X)
+      if (keysCurrent() & KEY_A)
       {
         if (gpFic[ucGameAct].uType != DIRECTORY)
         {
@@ -723,6 +729,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
                 romSelected=0;
               }
               dsDisplayFiles(firstRomDisplay,romSelected);
+              last_game_highlighted=-1;
           }
           else
           {
@@ -763,27 +770,68 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
           DSPrint(1,6+romSelected,2,szName);
         }
       }
-      
-      ShowRandomPreviewSnaps();
-#if 0
-      static int last_game_highlighted=0;
-      if (last_game_highlighted != ucGameAct)
+
+      // ---------------------------------------------------------------------------------------------------
+      // Show box art if it's available... otherwise show the random preview snaps per the legacy handling.
+      // We only show box art if we are not swapping a disk (indicated by allow_dir_change).
+      // ---------------------------------------------------------------------------------------------------
+      if (allow_dir_change)
       {
-        BoxArt_ShowPNG((ucGameAct & 1) ? "yyy.png" : "yyy.png");
-        last_game_highlighted=ucGameAct;
+          if (last_game_highlighted != ucGameAct && ((keysCurrent() & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)) == 0))
+          {
+            if (!BoxArt_ShowPNG(gpFic[ucGameAct].szName, (gpFic[ucGameAct].uType == DIRECTORY) ? 1:0, 0))
+            {
+                if (bShowPreviewSnaps == 0)
+                {
+                    UpperScreenMainMenu();
+                }
+                bShowPreviewSnaps = 1;
+            }
+            else
+            {
+                bShowPreviewSnaps = 0;
+            }
+            last_game_highlighted=ucGameAct;
+            last_show_y_offset = 0;
+            direction = 1;
+            dwell = 60;
+          }
+          else
+          {
+              if (!dwell)
+              {
+                  if (dampen++ & 1)
+                  {
+                      if ((keysCurrent() & KEY_X) == 0)
+                      {
+                          last_show_y_offset += direction;
+                          if (last_show_y_offset == BoxArt_MaxOffset()) {dwell = 60; direction = -direction;}
+                          if (last_show_y_offset == 0) {dwell = 60; direction = -direction;}
+                          BoxArt_Display(last_show_y_offset);
+                      }
+                  }
+              } else dwell--;
+          }
+          
+          if (bShowPreviewSnaps)
+          {
+              ShowRandomPreviewSnaps();
+          }
       }
-#endif      
+      
       swiWaitForVBlank();
     }
 
     // Wait for key to be released before returning
     while ((keysCurrent() & (KEY_TOUCH | KEY_START | KEY_SELECT | KEY_A | KEY_B | KEY_R | KEY_L | KEY_UP | KEY_DOWN))!=0);
-    
-#if 0   
-    extern void restore_lcd(void);
-    restore_lcd();
-#endif
 
+    // If we have used the screen for preview snaps... restore it
+    if (allow_dir_change)
+    {
+        extern void restore_lcd(void);
+        restore_lcd();
+    }
+    
     return 0x01;
 }
 
@@ -1111,7 +1159,7 @@ void SetDefaultGameConfig(void)
     myConfig.scaleScreen  = 0;                           // 0=No Screen Scale. 1=Vertical Compression (yuck!)
     myConfig.maskBorders  = 0;                           // No border masking by default
     myConfig.frameSkip    = (isDSiMode() ? 0:1);         // Frame Skip is disabled on DSi and above
-    myConfig.ymScale      = 3;                           // Normal YM is scaled by x8
+    myConfig.ymScale      = YM_BAL_MAX;                  // Normal YM is scaled to be the loudest
     myConfig.overscan     = 0;                           // VDP Overscan disabled until specifically enabled
     myConfig.reserved1    = 0;
     myConfig.reserved2    = 0;
@@ -1702,16 +1750,8 @@ void CheckIfGameHasMusicMapper(void)
     }
 }
 
-
-// --------------------------------------------------------------------
-// Let the user select new options for the currently loaded game...
-// --------------------------------------------------------------------
-void HachibittoMainMenu(void)
+void UpperScreenMainMenu(void)
 {
-    u8 bPlayGame=0;
-    u8 screenTouched = 1;
-
-    // Upper Screen Background
     videoSetMode(MODE_0_2D | DISPLAY_BG0_ACTIVE | DISPLAY_BG1_ACTIVE | DISPLAY_SPR_1D_LAYOUT | DISPLAY_SPR_ACTIVE);
     vramSetBankA(VRAM_A_MAIN_BG);
     vramSetBankB(VRAM_B_MAIN_SPRITE_0x06400000);
@@ -1723,6 +1763,18 @@ void HachibittoMainMenu(void)
     dmaCopy((void*) topscreenPal,(void*) BG_PALETTE,256*2);
     unsigned short dmaVal =  *(bgGetMapPtr(bg0) + 51*32);
     dmaFillWords(dmaVal | (dmaVal<<16),(void*) bgGetMapPtr(bg1),32*24*2);
+}
+
+// --------------------------------------------------------------------
+// Let the user select new options for the currently loaded game...
+// --------------------------------------------------------------------
+void HachibittoMainMenu(void)
+{
+    u8 bPlayGame=0;
+    u8 screenTouched = 1;
+
+    // Upper Screen Background
+    UpperScreenMainMenu();
 
     // Lower Screen Background
     BottomScreenMainMenu();

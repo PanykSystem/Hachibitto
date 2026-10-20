@@ -303,6 +303,7 @@ extern void ShowRandomPreviewSnaps(void);
 extern void IndirectRegWrite9938(u8 Value);
 extern void EnsureSaveDirectory(void);
 extern void intro_logo(void);
+extern void UpperScreenMainMenu(void);
 extern void update_arkanoid_paddle_position(u8 clockwise, u8 speed);
 
 #endif
