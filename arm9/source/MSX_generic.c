@@ -466,8 +466,8 @@ void HachibittoFindFiles(u8 media_id)
       {
         if (!((szFile[0] == '.') && (strlen(szFile) == 1)))
         {
-          // Do not include the [sav] directory
-          if (strcasecmp(szFile, "sav") != 0)
+          // Do not include the [sav] or [art] directories
+          if ((strcasecmp(szFile, "sav") != 0) && (strcasecmp(szFile, "art") != 0))
           {
               strcpy(gpFic[uNbFile].szName,szFile);
               gpFic[uNbFile].uType = DIRECTORY;
@@ -517,14 +517,14 @@ void HachibittoFindFiles(u8 media_id)
 // ----------------------------------------------------------------
 u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
 {
-    bool bDone=false;
+    u8 bDone=false;
     u16 ucHaut=0x00, ucBas=0x00,ucSHaut=0x00, ucSBas=0x00, romSelected= 0, firstRomDisplay=0,nbRomPerPage, uNbRSPage;
     s16 uLenFic=0, ucFlip=0, ucFlop=0;
-    int last_show_y_offset = 0;
-    int last_game_highlighted=-1;
-    int direction = 1;
-    int dampen = 0;
-    int dwell = 60;
+    s16 last_show_y_offset = 0;
+    s16 last_game_highlighted=-1;
+    s16 direction = 1;
+    s16 dampen = 0;
+    s16 dwell = 60;
     u8 bShowPreviewSnaps = 1;
 
     // Show the menu...
@@ -586,7 +586,6 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
           dsDisplayFiles(firstRomDisplay,romSelected);
         }
         else {
-
           ucHaut++;
           if (ucHaut>10) ucHaut=0;
         }
@@ -812,13 +811,13 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
                   }
               } else dwell--;
           }
-          
+
           if (bShowPreviewSnaps)
           {
               ShowRandomPreviewSnaps();
           }
       }
-      
+
       swiWaitForVBlank();
     }
 
@@ -831,7 +830,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
         extern void restore_lcd(void);
         restore_lcd();
     }
-    
+
     return 0x01;
 }
 
