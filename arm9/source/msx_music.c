@@ -9,7 +9,6 @@
 // The Hachibitto emulator is offered as-is, without any warranty. Please see readme.md
 // =====================================================================================
 
-//
 //  msx_music.c
 //  MSX-MUSIC (Yamaha YM2413 / OPLL) sound chip emulator - music only.
 //  The mixer uses a simplified two-operator FM path with per-operator
@@ -23,43 +22,42 @@
 
 #include "msx_music.h"
 #include "MSX_generic.h"
-#include <string.h>    // memcpy, memset
+#include <string.h> // memcpy, memset
 
 //@----------------------------------------------------------------------------
 //@ Tunables.
 //@----------------------------------------------------------------------------
-#define YM_SAMPLE_RATE             31000     // confirmed value, matches the AY driver's rate
-#define YM_MASTER_CLOCK            3579545   // MSX standard clock, same as SCC's
-#define YM_SIN_SHIFT               24        // phase>>24 -> 8-bit (256 entry) table index
-#define YM_GAIN_RAMP_STEP          16        // Gain ramp toward full level on key-on.
-#define YM_PERCUSSION_RELEASE_STEP 7780      // PERCUSSION release rate: higher = faster decay
-                                             // for more distinct drum hits.
+#define YM_SAMPLE_RATE 31000            // confirmed value, matches the AY driver's rate
+#define YM_MASTER_CLOCK 3579545         // MSX standard clock, same as SCC's
+#define YM_SIN_SHIFT 24                 // phase>>24 -> 8-bit (256 entry) table index
+#define YM_GAIN_RAMP_STEP 16            // Gain ramp toward full level on key-on.
+#define YM_PERCUSSION_RELEASE_STEP 7780 // PERCUSSION release rate: higher = faster decay
+                                        // for more distinct drum hits.
 
 /* FM envelope: 32-bit fixed point, 16 fractional bits.
    0 = full level, YM_ENV_SILENT = silent.  Amplitude = 255 - (env >> 16). */
-#define YM_ENV_SILENT              (255u << 16)
+#define YM_ENV_SILENT (255u << 16)
 
 /* Decay/release speed. Per-sample envelope step for rate R (1..15) is
    YM_RATE_BASE << (R-1): speed doubles with every rate step like the real OPLL.
    170 gives ~3.2s full-scale at R=1, ~25ms at R=8, ~1.5ms at R=12
    is a LINEAR amplitude ramp, so it needs to run much faster than the real
    chip's dB-domain times to sound the same. Tune by ear. */
-#define YM_RATE_BASE               170u
+#define YM_RATE_BASE 170u
 
 /* The envelopes are only advanced once every (1 << YM_ENV_DIV_SHIFT) output
    samples (all steps are scaled up to compensate).  Saves a lot of CPU and
    is inaudible at these rates. 2 = every 4th sample (~7.7 kHz). */
-#define YM_ENV_DIV_SHIFT           2
+#define YM_ENV_DIV_SHIFT 2
 
 /* Linear amplitude factors for the OPLL's 3 dB-per-step channel volume. */
-static   u8 YM_SustainGain[16] __attribute__((section(".dtcm"))) =
-{
-    255, 181, 128, 90, 64, 45, 32, 22, 16,  11,   8,  5,  4,  2,  1,  0
-};
-#define YM_SUSTAIN_TICK_SAMPLES 64  // Samples between sustain-level gain reductions
+static u8 YM_SustainGain[16] __attribute__((section(".dtcm"))) =
+    {
+        255, 181, 128, 90, 64, 45, 32, 22, 16, 11, 8, 5, 4, 2, 1, 0};
+#define YM_SUSTAIN_TICK_SAMPLES 64 // Samples between sustain-level gain reductions
 
-#define YM_OUT_SHIFT  8     // Output scaling for the mixer and rhythm paths.
-                            // The FM path scales its output separately.
+#define YM_OUT_SHIFT 8 // Output scaling for the mixer and rhythm paths.
+                       // The FM path scales its output separately.
 
 //@----------------------------------------------------------------------------
 //@ 256-entry soft-square-like carrier waveform table, amplitude -127..127.
@@ -171,14 +169,15 @@ static u8 YM_TLAtten[64] __attribute__((section(".dtcm"))) = {
     4,4,3,3,3,3,2,2,2,2,2,2,1,1,1,1
 };
 
-
 //@----------------------------------------------------------------------------
 //@ Small helpers
 //@----------------------------------------------------------------------------
-static YM_Instrument *YM_GetInstrument(  YM *chip, u8 instrument)
+static YM_Instrument *YM_GetInstrument(YM *chip, u8 instrument)
 {
     if (instrument == 0)
+    {
         return &chip->customInstrument;
+    }
     return &YM_InstrumentROM[instrument & 0x0F];
 }
 
@@ -192,9 +191,12 @@ static u32 YM_ComputePhaseIncrement(u16 fNumber, u8 block, u8 mulNibble)
     unsigned long long num = (unsigned long long)fNumber * (unsigned long long)YM_MulTableX2[mulNibble & 0x0F];
     num <<= block;
     num *= (unsigned long long)YM_MASTER_CLOCK << 12;
-    
+
     unsigned long long inc = num / (36ULL * YM_SAMPLE_RATE);
-    if (inc >= 0x40000000ULL) return 0;   // would alias: freeze the operator
+    if (inc >= 0x40000000ULL)
+    {
+        return 0; // would alias: freeze the operator
+    }
     return (u32)inc;
 }
 
@@ -216,8 +218,12 @@ static void YM_UpdateCustomUsers(YM *chip)
 {
     int ch;
     for (ch = 0; ch < YM_NUM_CHANNELS; ch++)
+    {
         if (chip->channels[ch].instrument == 0)
+        {
             YM_UpdateChannelFreq(chip, ch);
+        }
+    }
 }
 
 //@----------------------------------------------------------------------------
@@ -270,7 +276,7 @@ static inline void YM_UpdateGain(YM_Oscillator *osc, u8 keyOn, u32 releaseStep)
 void YMReset(YM *chip)
 {
     memset(chip, 0, sizeof(YM));
-    chip->noiseLFSR = 1;    // must not be seeded with 0, or the LFSR locks up
+    chip->noiseLFSR = 1; // must not be seeded with 0, or the LFSR locks up
     int ch;
     for (ch = 0; ch < YM_NUM_CHANNELS; ch++)
     {
@@ -288,7 +294,9 @@ static void YM_RhythmRetrigger(YM_Oscillator *osc, int resetPhase)
     osc->releaseAccum = 0;
     osc->sustainCounter = 0;
     if (resetPhase)
+    {
         osc->phase = 0;
+    }
 }
 
 void YMWrite(u8 value, u8 address, YM *chip)
@@ -298,34 +306,46 @@ void YMWrite(u8 value, u8 address, YM *chip)
         YM_Instrument *ci = &chip->customInstrument;
         switch (address)
         {
-            case 0x00:
-                ci->amMod = (value & YM_REG_AM_BIT) ? 1 : 0;
-                ci->vibMod = (value & YM_REG_VIB_BIT) ? 1 : 0;
-                ci->egTypeMod = (value & YM_REG_EGTYPE_BIT) ? 1 : 0;
-                ci->ksrMod = (value & YM_REG_KSR_BIT) ? 1 : 0;
-                ci->mulMod = value & YM_REG_MUL_MASK;
-                break;
-            case 0x01:
-                ci->amCar = (value & YM_REG_AM_BIT) ? 1 : 0;
-                ci->vibCar = (value & YM_REG_VIB_BIT) ? 1 : 0;
-                ci->egTypeCar = (value & YM_REG_EGTYPE_BIT) ? 1 : 0;
-                ci->ksrCar = (value & YM_REG_KSR_BIT) ? 1 : 0;
-                ci->mulCar = value & YM_REG_MUL_MASK;
-                break;
-            case 0x02:
-                ci->kslMod = value >> YM_REG_KSL_SHIFT;
-                ci->tl = value & YM_REG_TL_MASK;
-                break;
-            case 0x03:
-                ci->kslCar = value >> YM_REG_KSL_SHIFT;
-                ci->dc = (value & YM_REG_DC_BIT) ? 1 : 0;
-                ci->dm = (value & YM_REG_DM_BIT) ? 1 : 0;
-                ci->fb = value & YM_REG_FB_MASK;
-                break;
-            case 0x04: ci->arMod = value >> YM_REG_AR_SHIFT; ci->drMod = value & YM_REG_DR_MASK; break;
-            case 0x05: ci->arCar = value >> YM_REG_AR_SHIFT; ci->drCar = value & YM_REG_DR_MASK; break;
-            case 0x06: ci->slMod = value >> YM_REG_SL_SHIFT; ci->rrMod = value & YM_REG_RR_MASK; break;
-            case 0x07: ci->slCar = value >> YM_REG_SL_SHIFT; ci->rrCar = value & YM_REG_RR_MASK; break;
+        case 0x00:
+            ci->amMod = (value & YM_REG_AM_BIT) ? 1 : 0;
+            ci->vibMod = (value & YM_REG_VIB_BIT) ? 1 : 0;
+            ci->egTypeMod = (value & YM_REG_EGTYPE_BIT) ? 1 : 0;
+            ci->ksrMod = (value & YM_REG_KSR_BIT) ? 1 : 0;
+            ci->mulMod = value & YM_REG_MUL_MASK;
+            break;
+        case 0x01:
+            ci->amCar = (value & YM_REG_AM_BIT) ? 1 : 0;
+            ci->vibCar = (value & YM_REG_VIB_BIT) ? 1 : 0;
+            ci->egTypeCar = (value & YM_REG_EGTYPE_BIT) ? 1 : 0;
+            ci->ksrCar = (value & YM_REG_KSR_BIT) ? 1 : 0;
+            ci->mulCar = value & YM_REG_MUL_MASK;
+            break;
+        case 0x02:
+            ci->kslMod = value >> YM_REG_KSL_SHIFT;
+            ci->tl = value & YM_REG_TL_MASK;
+            break;
+        case 0x03:
+            ci->kslCar = value >> YM_REG_KSL_SHIFT;
+            ci->dc = (value & YM_REG_DC_BIT) ? 1 : 0;
+            ci->dm = (value & YM_REG_DM_BIT) ? 1 : 0;
+            ci->fb = value & YM_REG_FB_MASK;
+            break;
+        case 0x04:
+            ci->arMod = value >> YM_REG_AR_SHIFT;
+            ci->drMod = value & YM_REG_DR_MASK;
+            break;
+        case 0x05:
+            ci->arCar = value >> YM_REG_AR_SHIFT;
+            ci->drCar = value & YM_REG_DR_MASK;
+            break;
+        case 0x06:
+            ci->slMod = value >> YM_REG_SL_SHIFT;
+            ci->rrMod = value & YM_REG_RR_MASK;
+            break;
+        case 0x07:
+            ci->slCar = value >> YM_REG_SL_SHIFT;
+            ci->rrCar = value & YM_REG_RR_MASK;
+            break;
         }
         YM_UpdateCustomUsers(chip);
     }
@@ -358,34 +378,54 @@ void YMWrite(u8 value, u8 address, YM *chip)
                 for (int c6 = YM_CHANNEL_BD; c6 <= YM_CHANNEL_TOMTCY; c6++)
                 {
                     chip->channels[c6].keyOn = 0;
-                    chip->channels[c6].osc.gain = 0;   // drop any leftover melodic gain
+                    chip->channels[c6].osc.gain = 0; // drop any leftover melodic gain
                 }
-                
+
                 /* Entering rhythm mode: any selected percussion voice is a new hit. */
                 if (value & YM_RHYTHM_BD_BIT)
+                {
                     YM_RhythmRetrigger(&chip->channels[YM_CHANNEL_BD].osc, 1);
+                }
                 if (value & YM_RHYTHM_SD_BIT)
+                {
                     YM_RhythmRetrigger(&chip->rhythmSD, 1);
+                }
                 if (value & YM_RHYTHM_TOM_BIT)
+                {
                     YM_RhythmRetrigger(&chip->channels[YM_CHANNEL_TOMTCY].osc, 1);
+                }
                 if (value & YM_RHYTHM_TCY_BIT)
+                {
                     YM_RhythmRetrigger(&chip->rhythmTCY, 0);
+                }
                 if (value & YM_RHYTHM_HH_BIT)
+                {
                     YM_RhythmRetrigger(&chip->channels[YM_CHANNEL_HHSD].osc, 0);
+                }
             }
             else
             {
                 /* Normal drum trigger: only newly asserted bits re-attack. */
                 if ((value & YM_RHYTHM_BD_BIT) && !(old & YM_RHYTHM_BD_BIT))
+                {
                     YM_RhythmRetrigger(&chip->channels[YM_CHANNEL_BD].osc, 1);
+                }
                 if ((value & YM_RHYTHM_SD_BIT) && !(old & YM_RHYTHM_SD_BIT))
+                {
                     YM_RhythmRetrigger(&chip->rhythmSD, 1);
+                }
                 if ((value & YM_RHYTHM_TOM_BIT) && !(old & YM_RHYTHM_TOM_BIT))
+                {
                     YM_RhythmRetrigger(&chip->channels[YM_CHANNEL_TOMTCY].osc, 1);
+                }
                 if ((value & YM_RHYTHM_TCY_BIT) && !(old & YM_RHYTHM_TCY_BIT))
+                {
                     YM_RhythmRetrigger(&chip->rhythmTCY, 0);
+                }
                 if ((value & YM_RHYTHM_HH_BIT) && !(old & YM_RHYTHM_HH_BIT))
+                {
                     YM_RhythmRetrigger(&chip->channels[YM_CHANNEL_HHSD].osc, 0);
+                }
             }
         }
         else
@@ -422,8 +462,8 @@ void YMWrite(u8 value, u8 address, YM *chip)
             u8 newKey = (value & YM_REG_KEY_BIT) ? 1 : 0;
             if (newKey && !c->keyOn)
             {
-                c->osc.previousKeyOn = 0;   /* make the mixer see a fresh key-on edge */
-                c->osc.gain = 0;            /* clear stale activity before key-on     */
+                c->osc.previousKeyOn = 0; /* make the mixer see a fresh key-on edge */
+                c->osc.gain = 0;          /* clear stale activity before key-on     */
             }
             c->keyOn = newKey;
         }
@@ -436,11 +476,22 @@ void YMWrite(u8 value, u8 address, YM *chip)
         chip->channels[ch].instPtr = YM_GetInstrument(chip, chip->channels[ch].instrument);
         chip->channels[ch].osc.sustainGain =
             ((chip->channels[ch].instPtr->slCar & 0x0F) == 15)
-            ? 255
-            : YM_SustainGain[chip->channels[ch].instPtr->slCar & 0x0F];
-        if (ch == YM_CHANNEL_BD)  chip->rhythmVolBD = value & YM_REG_VOL_MASK;
-        if (ch == YM_CHANNEL_HHSD)  { chip->rhythmVolHH = value >> YM_REG_INST_SHIFT; chip->rhythmVolSD = value & YM_REG_VOL_MASK; }
-        if (ch == YM_CHANNEL_TOMTCY) { chip->rhythmVolTOM = value >> YM_REG_INST_SHIFT; chip->rhythmVolTCY = value & YM_REG_VOL_MASK; }
+                ? 255
+                : YM_SustainGain[chip->channels[ch].instPtr->slCar & 0x0F];
+        if (ch == YM_CHANNEL_BD)
+        {
+            chip->rhythmVolBD = value & YM_REG_VOL_MASK;
+        }
+        if (ch == YM_CHANNEL_HHSD)
+        {
+            chip->rhythmVolHH = value >> YM_REG_INST_SHIFT;
+            chip->rhythmVolSD = value & YM_REG_VOL_MASK;
+        }
+        if (ch == YM_CHANNEL_TOMTCY)
+        {
+            chip->rhythmVolTOM = value >> YM_REG_INST_SHIFT;
+            chip->rhythmVolTCY = value & YM_REG_VOL_MASK;
+        }
         YM_UpdateChannelFreq(chip, ch);
     }
 }
@@ -462,29 +513,35 @@ enum
     YM_FM_ENV_RELEASE
 };
 
-static   u8 YM_FM_SustainAtten[16] __attribute__((section(".dtcm"))) =
-{
-      0,  8, 16, 24, 32, 40, 48, 56,
-     64, 72, 80, 88, 96,104,112,127
-};
+static u8 YM_FM_SustainAtten[16] __attribute__((section(".dtcm"))) =
+    {
+        0, 8, 16, 24, 32, 40, 48, 56,
+        64, 72, 80, 88, 96, 104, 112, 127};
 
-static   u8 YM_FM_FBDepth[8] __attribute__((section(".dtcm"))) =
-{
-    0, 2, 4, 8, 16, 32, 64, 96
-};
+static u8 YM_FM_FBDepth[8] __attribute__((section(".dtcm"))) =
+    {
+        0, 2, 4, 8, 16, 32, 64, 96};
 
 /* Attack still uses the old small per-sample step (applied << 16). */
 static inline u8 YM_FMRateStepPrecompute(u8 rate, u8 block, u8 ksr)
 {
     u32 r = rate & 0x0F;
     if (r == 0)
+    {
         return 1;
+    }
     if (ksr)
+    {
         r += block >> 1;
+    }
     else
+    {
         r += block >> 2;
+    }
     if (r > 15)
+    {
         r = 15;
+    }
     return (u8)(1 + (r * r >> 3));
 }
 
@@ -497,12 +554,18 @@ static inline u32 YM_FMRateInc(u8 rate, u8 block, u8 ksr, int mustMove)
     u32 r = rate & 0x0F;
     if (r == 0)
     {
-        if (!mustMove) return 0;
+        if (!mustMove)
+        {
+            return 0;
+        }
         r = 1;
     }
     r += ksr ? (block >> 1) : (block >> 2);
-    if (r > 15) r = 15;
-    return (YM_RATE_BASE << (r - 1)) << YM_ENV_DIV_SHIFT;   // per envelope update
+    if (r > 15)
+    {
+        r = 15;
+    }
+    return (YM_RATE_BASE << (r - 1)) << YM_ENV_DIV_SHIFT; // per envelope update
 }
 
 static inline void YM_PrecomputeFMRates(YM *chip, int ch)
@@ -541,7 +604,7 @@ static inline void YM_PrecomputeFMRates(YM *chip, int ch)
     p->modDepth = (u8)(8 + ((63 - (inst->tl & 0x3F)) >> 1));
 
     p->fbDepth = YM_FM_FBDepth[inst->fb & 7];
-    p->volume = YM_SustainGain[chip->channels[ch].volume & 0x0F];   /* 3 dB/step like the OPLL */
+    p->volume = YM_SustainGain[chip->channels[ch].volume & 0x0F]; /* 3 dB/step like the OPLL */
     p->waveMod = chip->channels[ch].instrument == 0 && inst->dm;
     p->waveCar = chip->channels[ch].instrument == 0 ? (inst->dc ? 2 : 1) : 0;
 }
@@ -655,7 +718,9 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
 
     s32 mod = YM_CarrierSineTable[(osc->modPhase >> YM_SIN_SHIFT) & 0xFF];
     if (p->waveMod && mod < 0)
+    {
         mod = 0;
+    }
     s32 modGain = 255 - (s32)(osc->modEnv >> 16);
     mod = (mod * modGain) >> 8;
 
@@ -668,7 +733,9 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     // nearly a full-cycle phase jump and sounds like broadband grit.
     s32 feedback = osc->feedback;
     if (p->fbDepth)
+    {
         mod += (feedback * p->fbDepth) >> 10;
+    }
     osc->feedback = (s16)mod;
 
     // TL-derived modulation depth is also precomputed.
@@ -684,7 +751,9 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     {
         carrier = YM_CarrierSineTable[carrierIndex];
         if (p->waveCar == 2 && carrier < 0)
+        {
             carrier = 0;
+        }
     }
 
     // Carrier envelope followed by channel volume attenuation.
@@ -692,7 +761,7 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     carrier = (carrier * p->volume) >> 7;
 
     // Apply the configured YM output level after channel-volume attenuation.
-    return carrier << (myConfig.ymScale+1);
+    return carrier << (myConfig.ymScale + 1);
 }
 
 // -------------------------------------------------------------------------
@@ -722,14 +791,15 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
             YM_Channel *cc = &chip->channels[ch];
 
             if (!cc->keyOn && cc->osc.gain == 0)
+            {
                 continue;
+            }
 
             sample += YM_RenderChannel2FM(
                 &cc->osc,
                 cc->keyOn,
                 ch,
-                doEnv
-            );
+                doEnv);
         }
 
         /*
@@ -747,16 +817,13 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 YM_UpdateGain(
                     &bd->osc,
                     0,
-                    YM_PERCUSSION_RELEASE_STEP
-                );
+                    YM_PERCUSSION_RELEASE_STEP);
 
                 if (bd->osc.gain != 0)
                 {
                     bd->osc.phase += bd->osc.phaseIncrement;
 
-                    s32 s = YM_CarrierSineTable[
-                        (bd->osc.phase >> YM_SIN_SHIFT) & 0xFF
-                    ];
+                    s32 s = YM_CarrierSineTable[(bd->osc.phase >> YM_SIN_SHIFT) & 0xFF];
 
                     sample +=
                         (s *
@@ -772,16 +839,13 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 YM_UpdateGain(
                     &tt->osc,
                     0,
-                    YM_PERCUSSION_RELEASE_STEP
-                );
+                    YM_PERCUSSION_RELEASE_STEP);
 
                 if (tt->osc.gain != 0)
                 {
                     tt->osc.phase += tt->osc.phaseIncrement;
 
-                    s32 s = YM_CarrierSineTable[
-                        (tt->osc.phase >> YM_SIN_SHIFT) & 0xFF
-                    ];
+                    s32 s = YM_CarrierSineTable[(tt->osc.phase >> YM_SIN_SHIFT) & 0xFF];
 
                     sample +=
                         (s *
@@ -799,7 +863,9 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 chip->rhythmTCY.gain != 0)
             {
                 if (chip->noiseLFSR & 1)
+                {
                     chip->noiseLFSR ^= 0x800200;
+                }
 
                 chip->noiseLFSR >>= 1;
                 chip->noiseLFSR &= 0x7FFFFF;
@@ -828,17 +894,20 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                     YM_UpdateGain(
                         &hs->osc,
                         0,
-                        YM_PERCUSSION_RELEASE_STEP
-                    );
+                        YM_PERCUSSION_RELEASE_STEP);
 
                     if (hs->osc.gain != 0)
                     {
                         u32 phase;
 
                         if (shortNoise)
+                        {
                             phase = noiseBit ? 0x2D0 : 0x234;
+                        }
                         else
+                        {
                             phase = noiseBit ? 0x034 : 0x0D0;
+                        }
 
                         s32 s = YM_RHYTHM_WAVE(phase);
 
@@ -856,17 +925,20 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                     YM_UpdateGain(
                         &chip->rhythmSD,
                         0,
-                        2000
-                    );
+                        2000);
 
                     if (chip->rhythmSD.gain != 0)
                     {
                         u32 phase;
 
                         if (hhPhase & 0x100)
+                        {
                             phase = noiseBit ? 0x300 : 0x200;
+                        }
                         else
+                        {
                             phase = noiseBit ? 0x000 : 0x100;
+                        }
 
                         s32 s = YM_RHYTHM_WAVE(phase);
 
@@ -884,8 +956,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                     YM_UpdateGain(
                         &chip->rhythmTCY,
                         0,
-                        YM_PERCUSSION_RELEASE_STEP
-                    );
+                        YM_PERCUSSION_RELEASE_STEP);
 
                     if (chip->rhythmTCY.gain != 0)
                     {
@@ -914,8 +985,14 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
         s32 mixed = ((s32)dest[i] + 32767) + sample;
 
         // Clamp final mixed result...
-        if (mixed > 32767) {mixed = 32767;}
-        else if (mixed < -32768) {mixed = -32768;}
+        if (mixed > 32767)
+        {
+            mixed = 32767;
+        }
+        else if (mixed < -32768)
+        {
+            mixed = -32768;
+        }
 
         dest[i] = (s16)mixed;
     }

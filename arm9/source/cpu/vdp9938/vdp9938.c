@@ -209,14 +209,27 @@ tScrMode SCR[MAXSCREEN+1] __attribute__((section(".dtcm")))  = {
 
 void (*RefreshLine)(u8 uY) __attribute__((section(".dtcm"))) = RefreshLine0;
 
+
 /** Palette9918[] ********************************************/
 /** 16 standard colors used by VDP9938/TMS9928 VDP chips.   **/
 /*************************************************************/
-u8 VDP9918A_palette[16*3] = {
-  0x00,0x00,0x00,   0x01,0x01,0x01,   0x20,0xC0,0x20,   0x60,0xE0,0x60,
-  0x20,0x20,0xE0,   0x40,0x60,0xE0,   0xA0,0x20,0x20,   0x40,0xC0,0xE0,
-  0xE0,0x20,0x20,   0xE0,0x60,0x60,   0xC0,0xC0,0x20,   0xC0,0xC0,0x80,
-  0x20,0x80,0x20,   0xC0,0x40,0xA0,   0xA0,0xA0,0xA0,   0xE0,0xE0,0xE0,
+u8 VDP9918A_palette[16 * 3] = {
+    0x00,    0x00,    0x00,    //  0: Transparent
+    0x01,    0x01,    0x01,    //  1: Black
+    0x20,    0xC0,    0x20,    //  2: Medium green
+    0x60,    0xE0,    0x60,    //  3: Light green
+    0x20,    0x20,    0xE0,    //  4: Dark blue
+    0x40,    0x60,    0xE0,    //  5: Light blue
+    0xA0,    0x20,    0x20,    //  6: Dark red
+    0x40,    0xC0,    0xE0,    //  7: Cyan
+    0xE0,    0x20,    0x20,    //  8: Medium red
+    0xE0,    0x60,    0x60,    //  9: Light red
+    0xC0,    0xC0,    0x20,    // 10: Dark yellow
+    0xC0,    0xC0,    0x80,    // 11: Light yellow
+    0x20,    0x80,    0x20,    // 12: Dark green
+    0xC0,    0x40,    0xA0,    // 13: Magenta
+    0xA0,    0xA0,    0xA0,    // 14: Gray
+    0xE0,    0xE0,    0xE0,    // 15: White
 };
 
 u8 VDP_RegisterMasks[] __attribute__((section(".dtcm"))) = { 0x7e,0x7f,0x7f,0xff,0x3f,0xff,0x3f,0xff,
@@ -817,8 +830,8 @@ ITCM_CODE void ColorSprites(uint8_t Y, u8 *ZBuf)
 
 static inline u8 Screen8SpriteByte(const u8 *base, int offset)
 {
-        u32 address = ((u32)(base - VDP_Memory) + offset) & 0x1FFFF;
-        return VDP_Memory[VDP9938Screen8Address(address)];
+    u32 address = ((u32)(base - VDP_Memory) + offset) & 0x1FFFF;
+    return VDP_Memory[VDP9938Screen8Address(address)];
 }
 
 u8 DoesScreen8LineHaveSprites(uint8_t Y)
@@ -932,28 +945,28 @@ void ColorSpritesScreen8(uint8_t Y, u8 *ZBuf)
                     {
                         if (J)
                         {
-                                if(J&0x80) { SPR_OR(0);SPR_OR(1); }
-                                if(J&0x40) { SPR_OR(2);SPR_OR(3); }
-                                if(J&0x20) { SPR_OR(4);SPR_OR(5); }
-                                if(J&0x10) { SPR_OR(6);SPR_OR(7); }
-                                if(J&0x08) { SPR_OR(8);SPR_OR(9); }
-                                if(J&0x04) { SPR_OR(10);SPR_OR(11); }
-                                if(J&0x02) { SPR_OR(12);SPR_OR(13); }
-                                if(J&0x01) { SPR_OR(14);SPR_OR(15); }
+                            if(J&0x80) { SPR_OR(0);SPR_OR(1); }
+                            if(J&0x40) { SPR_OR(2);SPR_OR(3); }
+                            if(J&0x20) { SPR_OR(4);SPR_OR(5); }
+                            if(J&0x10) { SPR_OR(6);SPR_OR(7); }
+                            if(J&0x08) { SPR_OR(8);SPR_OR(9); }
+                            if(J&0x04) { SPR_OR(10);SPR_OR(11); }
+                            if(J&0x02) { SPR_OR(12);SPR_OR(13); }
+                            if(J&0x01) { SPR_OR(14);SPR_OR(15); }
                         }
                         if(IH>8)
                         {
                             J=Screen8SpriteByte(SprGen,PT-SprGen+16);
                             if (J)
                             {
-                                    if(J&0x80) { SPR_OR(16);SPR_OR(17); }
-                                    if(J&0x40) { SPR_OR(18);SPR_OR(19); }
-                                    if(J&0x20) { SPR_OR(20);SPR_OR(21); }
-                                    if(J&0x10) { SPR_OR(22);SPR_OR(23); }
-                                    if(J&0x08) { SPR_OR(24);SPR_OR(25); }
-                                    if(J&0x04) { SPR_OR(26);SPR_OR(27); }
-                                    if(J&0x02) { SPR_OR(28);SPR_OR(29); }
-                                    if(J&0x01) { SPR_OR(30);SPR_OR(31); }
+                                if(J&0x80) { SPR_OR(16);SPR_OR(17); }
+                                if(J&0x40) { SPR_OR(18);SPR_OR(19); }
+                                if(J&0x20) { SPR_OR(20);SPR_OR(21); }
+                                if(J&0x10) { SPR_OR(22);SPR_OR(23); }
+                                if(J&0x08) { SPR_OR(24);SPR_OR(25); }
+                                if(J&0x04) { SPR_OR(26);SPR_OR(27); }
+                                if(J&0x02) { SPR_OR(28);SPR_OR(29); }
+                                if(J&0x01) { SPR_OR(30);SPR_OR(31); }
                             }
                         }
                     }
@@ -961,28 +974,28 @@ void ColorSpritesScreen8(uint8_t Y, u8 *ZBuf)
                     {
                         if (J)
                         {
-                                if(J&0x80) SPR_OR(0);
-                                if(J&0x40) SPR_OR(1);
-                                if(J&0x20) SPR_OR(2);
-                                if(J&0x10) SPR_OR(3);
-                                if(J&0x08) SPR_OR(4);
-                                if(J&0x04) SPR_OR(5);
-                                if(J&0x02) SPR_OR(6);
-                                if(J&0x01) SPR_OR(7);
+                            if(J&0x80) SPR_OR(0);
+                            if(J&0x40) SPR_OR(1);
+                            if(J&0x20) SPR_OR(2);
+                            if(J&0x10) SPR_OR(3);
+                            if(J&0x08) SPR_OR(4);
+                            if(J&0x04) SPR_OR(5);
+                            if(J&0x02) SPR_OR(6);
+                            if(J&0x01) SPR_OR(7);
                         }
                         if(IH>8)
                         {
                             J=Screen8SpriteByte(SprGen,PT-SprGen+16);
                             if (J)
                             {
-                                    if(J&0x80) SPR_OR(8);
-                                    if(J&0x40) SPR_OR(9);
-                                    if(J&0x20) SPR_OR(10);
-                                    if(J&0x10) SPR_OR(11);
-                                    if(J&0x08) SPR_OR(12);
-                                    if(J&0x04) SPR_OR(13);
-                                    if(J&0x02) SPR_OR(14);
-                                    if(J&0x01) SPR_OR(15);
+                                if(J&0x80) SPR_OR(8);
+                                if(J&0x40) SPR_OR(9);
+                                if(J&0x20) SPR_OR(10);
+                                if(J&0x10) SPR_OR(11);
+                                if(J&0x08) SPR_OR(12);
+                                if(J&0x04) SPR_OR(13);
+                                if(J&0x02) SPR_OR(14);
+                                if(J&0x01) SPR_OR(15);
                             }
                         }
                     }
@@ -995,25 +1008,25 @@ void ColorSpritesScreen8(uint8_t Y, u8 *ZBuf)
                         {
                                 if ((u32)P&1)
                                 {
-                                        if(J&0x80) { SPR_SET(0);SPR_SET(1); }
-                                        if(J&0x40) { SPR_SET(2);SPR_SET(3); }
-                                        if(J&0x20) { SPR_SET(4);SPR_SET(5); }
-                                        if(J&0x10) { SPR_SET(6);SPR_SET(7); }
-                                        if(J&0x08) { SPR_SET(8);SPR_SET(9); }
-                                        if(J&0x04) { SPR_SET(10);SPR_SET(11); }
-                                        if(J&0x02) { SPR_SET(12);SPR_SET(13); }
-                                        if(J&0x01) { SPR_SET(14);SPR_SET(15); }
+                                    if(J&0x80) { SPR_SET(0);SPR_SET(1); }
+                                    if(J&0x40) { SPR_SET(2);SPR_SET(3); }
+                                    if(J&0x20) { SPR_SET(4);SPR_SET(5); }
+                                    if(J&0x10) { SPR_SET(6);SPR_SET(7); }
+                                    if(J&0x08) { SPR_SET(8);SPR_SET(9); }
+                                    if(J&0x04) { SPR_SET(10);SPR_SET(11); }
+                                    if(J&0x02) { SPR_SET(12);SPR_SET(13); }
+                                    if(J&0x01) { SPR_SET(14);SPR_SET(15); }
                                 }
                                 else
                                 {
-                                        if(J&0x80) { SPR_SET16(0); }
-                                        if(J&0x40) { SPR_SET16(2); }
-                                        if(J&0x20) { SPR_SET16(4); }
-                                        if(J&0x10) { SPR_SET16(6); }
-                                        if(J&0x08) { SPR_SET16(8); }
-                                        if(J&0x04) { SPR_SET16(10); }
-                                        if(J&0x02) { SPR_SET16(12); }
-                                        if(J&0x01) { SPR_SET16(14); }
+                                    if(J&0x80) { SPR_SET16(0); }
+                                    if(J&0x40) { SPR_SET16(2); }
+                                    if(J&0x20) { SPR_SET16(4); }
+                                    if(J&0x10) { SPR_SET16(6); }
+                                    if(J&0x08) { SPR_SET16(8); }
+                                    if(J&0x04) { SPR_SET16(10); }
+                                    if(J&0x02) { SPR_SET16(12); }
+                                    if(J&0x01) { SPR_SET16(14); }
                                 }
                         }
                         if(IH>8)
@@ -1050,28 +1063,28 @@ void ColorSpritesScreen8(uint8_t Y, u8 *ZBuf)
                     {
                         if (J)
                         {
-                                if(J&0x80) SPR_SET(0);
-                                if(J&0x40) SPR_SET(1);
-                                if(J&0x20) SPR_SET(2);
-                                if(J&0x10) SPR_SET(3);
-                                if(J&0x08) SPR_SET(4);
-                                if(J&0x04) SPR_SET(5);
-                                if(J&0x02) SPR_SET(6);
-                                if(J&0x01) SPR_SET(7);
+                            if(J&0x80) SPR_SET(0);
+                            if(J&0x40) SPR_SET(1);
+                            if(J&0x20) SPR_SET(2);
+                            if(J&0x10) SPR_SET(3);
+                            if(J&0x08) SPR_SET(4);
+                            if(J&0x04) SPR_SET(5);
+                            if(J&0x02) SPR_SET(6);
+                            if(J&0x01) SPR_SET(7);
                         }
                         if(IH>8)
                         {
                             J=Screen8SpriteByte(SprGen,PT-SprGen+16);
                             if (J)
                             {
-                                    if(J&0x80) SPR_SET(8);
-                                    if(J&0x40) SPR_SET(9);
-                                    if(J&0x20) SPR_SET(10);
-                                    if(J&0x10) SPR_SET(11);
-                                    if(J&0x08) SPR_SET(12);
-                                    if(J&0x04) SPR_SET(13);
-                                    if(J&0x02) SPR_SET(14);
-                                    if(J&0x01) SPR_SET(15);
+                                if(J&0x80) SPR_SET(8);
+                                if(J&0x40) SPR_SET(9);
+                                if(J&0x20) SPR_SET(10);
+                                if(J&0x10) SPR_SET(11);
+                                if(J&0x08) SPR_SET(12);
+                                if(J&0x04) SPR_SET(13);
+                                if(J&0x02) SPR_SET(14);
+                                if(J&0x01) SPR_SET(15);
                             }
                         }
                     }

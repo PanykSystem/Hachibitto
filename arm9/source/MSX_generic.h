@@ -56,7 +56,7 @@ struct __attribute__((__packed__)) GlobalConfig_t
     u8  showFPS;
     u8  bShowInstructions;
     u8  bDiskSounds;
-    u8  global_2;
+    u8  bShowPSG;
     u8  global_3;
     u8  global_4;
     u8  global_5;

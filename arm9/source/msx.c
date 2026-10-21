@@ -1784,6 +1784,12 @@ void MSX_InitialMemoryLayout(void)
             {
                 MyMedia[MEDIA_CART1].mapperType = MSX_GuessROMType(MyMedia[MEDIA_CART1].filesize); // We only bother if the game is 64K or larger
             }
+            
+            // Still no idea... we just call it MIRRORED and push on
+            if (MyMedia[MEDIA_CART1].mapperType == 0xFF)
+            {
+                MyMedia[MEDIA_CART1].mapperType = MIRRORED;
+            }
         }
         else // User has selected a specific mapper... who are we to argue?!
         {
@@ -1798,6 +1804,10 @@ void MSX_InitialMemoryLayout(void)
     if (MyMedia[MEDIA_CART2].filecrc && (myConfig.expansion != EXP_SCC_PLUS) && (myConfig.expansion != EXP_FM_PAC) && (myConfig.expansion != EXP_MEGARAM))
     {
         MyMedia[MEDIA_CART2].mapperType = RomDB_Lookup(MEDIA_CART2);
+        if (MyMedia[MEDIA_CART1].mapperType == 0xFF)
+        {
+            MyMedia[MEDIA_CART1].mapperType = MIRRORED;
+        }
         MSX_CartSetup(MEDIA_CART2);
     }
 
