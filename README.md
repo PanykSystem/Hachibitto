@@ -79,8 +79,8 @@ Options :
 * Screen Scale - can be used to compress 212 scanline games down to 192. Generally recommended to use Pan UP/DOWN instead as compression will obviously drop some scanlines.
 * Border Mask - can be used to hide the left/right 8 pixels so games that scroll "choppy" are a bit less visually bothersome.
 * Frameskip - on the DSi or above, should default to 'None' and you can leave it there... every game locks in at 60Hz. For the older hardware, some light frameskip is required.
-* YM Balance - normally set to 'HIGH' for 1:1 mixing with the normal AY PSG but this can sometimes sound too 'hot' for some games (e.g. Xak I) and so MEDIUM and LOW mixing is sometimes required.
-* VDP Overscan - can be enabled for the few games that use more than 212 scanlines. Uses more CPU power.
+* YM Balance - normally set to 'MAX' for 1:1 mixing with the normal AY PSG but this can sometimes sound too 'hot' for some games (e.g. Xak I) and so MEDIUM and LOW mixing is sometimes required.
+* VDP Overscan - can be enabled for the few games that use more than 212 scanlines. Uses more CPU power so only enable for games that need it.
 * Y-Offset - used to shift the screen up or down. Even easier is to use the Right Shoulder Button + UP/DOWN on the d-pad to shift the screen.  Buttons X/Y will pan up or down.
 
 Screen Zoom :
