@@ -577,6 +577,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
     s16 dampen = 0;
     s16 dwell = 60;
     u8 bShowPreviewSnaps = 1;
+    u8 dampen_boxart = 10;
 
     // Show the menu...
     while ((keysCurrent() & (KEY_TOUCH | KEY_START | KEY_SELECT | KEY_A | KEY_B)) != 0)
@@ -620,6 +621,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
     {
         if (keysCurrent() & KEY_UP)
         {
+            dampen_boxart = 10;
             if (!ucHaut)
             {
                 ucGameAct = (ucGameAct > 0 ? ucGameAct - 1 : countMSX - 1);
@@ -667,6 +669,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
         }
         if (keysCurrent() & KEY_DOWN)
         {
+            dampen_boxart = 10;
             if (!ucBas)
             {
                 ucGameAct = (ucGameAct < countMSX - 1 ? ucGameAct + 1 : 0);
@@ -718,6 +721,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
         // -------------------------------------------------------------
         if (keysCurrent() & KEY_RIGHT)
         {
+            dampen_boxart = 10;
             if (!ucSBas)
             {
                 ucGameAct = (ucGameAct < countMSX - nbRomPerPage ? ucGameAct + nbRomPerPage : countMSX - nbRomPerPage);
@@ -758,6 +762,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
         // -------------------------------------------------------------
         if (keysCurrent() & KEY_LEFT)
         {
+            dampen_boxart = 10;
             if (!ucSHaut)
             {
                 ucGameAct = (ucGameAct > nbRomPerPage ? ucGameAct - nbRomPerPage : 0);
@@ -909,53 +914,57 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
         // ---------------------------------------------------------------------------------------------------
         if (allow_dir_change)
         {
-            if (last_game_highlighted != ucGameAct && ((keysCurrent() & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)) == 0))
+            if (dampen_boxart == 0)
             {
-                if (!BoxArt_ShowPNG(gpFic[ucGameAct].szName, (gpFic[ucGameAct].uType == DIRECTORY) ? 1 : 0, 0))
+                if (last_game_highlighted != ucGameAct && ((keysCurrent() & (KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT)) == 0))
                 {
-                    if (bShowPreviewSnaps == 0)
+                    if (!BoxArt_ShowPNG(gpFic[ucGameAct].szName, (gpFic[ucGameAct].uType == DIRECTORY) ? 1 : 0, 0))
                     {
-                        UpperScreenMainMenu();
+                        if (bShowPreviewSnaps == 0)
+                        {
+                            UpperScreenMainMenu();
+                        }
+                        bShowPreviewSnaps = 1;
                     }
-                    bShowPreviewSnaps = 1;
+                    else
+                    {
+                        bShowPreviewSnaps = 0;
+                    }
+                    last_game_highlighted = ucGameAct;
+                    last_show_y_offset = 0;
+                    direction = 1;
+                    dwell = 60;
                 }
                 else
                 {
-                    bShowPreviewSnaps = 0;
-                }
-                last_game_highlighted = ucGameAct;
-                last_show_y_offset = 0;
-                direction = 1;
-                dwell = 60;
-            }
-            else
-            {
-                if (!dwell)
-                {
-                    if (dampen++ & 1)
+                    if (!dwell)
                     {
-                        if ((keysCurrent() & KEY_X) == 0)
+                        if (dampen++ & 1)
                         {
-                            last_show_y_offset += direction;
-                            if (last_show_y_offset == BoxArt_MaxOffset())
+                            if ((keysCurrent() & KEY_X) == 0)
                             {
-                                dwell = 60;
-                                direction = -direction;
+                                last_show_y_offset += direction;
+                                if (last_show_y_offset == BoxArt_MaxOffset())
+                                {
+                                    dwell = 60;
+                                    direction = -direction;
+                                }
+                                if (last_show_y_offset == 0)
+                                {
+                                    dwell = 60;
+                                    direction = -direction;
+                                }
+                                BoxArt_Display(last_show_y_offset);
                             }
-                            if (last_show_y_offset == 0)
-                            {
-                                dwell = 60;
-                                direction = -direction;
-                            }
-                            BoxArt_Display(last_show_y_offset);
                         }
                     }
-                }
-                else
-                {
-                    dwell--;
+                    else
+                    {
+                        dwell--;
+                    }
                 }
             }
+            else dampen_boxart--;
 
             if (bShowPreviewSnaps)
             {
@@ -1035,7 +1044,7 @@ void SaveConfig(bool bShow)
     {
         mkdir("/data", 0777); // Doesn't exist - make it...
     }
-    fp = fopen("/data/Hachibitto.dat", "wb+");
+    fp = fopen("/data/Hachibitto.dat", "wb");
     if (fp != NULL)
     {
         fwrite(&myGlobalConfig, sizeof(myGlobalConfig), 1, fp); // Write the global config
@@ -1043,8 +1052,8 @@ void SaveConfig(bool bShow)
         // --------------------------------------------------------------------
         // Compress the configuration data - this shrinks down quite nicely...
         // --------------------------------------------------------------------
-        int max_len = lzav_compress_bound_hi(sizeof(AllConfigs));
-        int comp_len = lzav_compress_hi(&AllConfigs, COMPRESS_BUFFER, sizeof(AllConfigs), max_len);
+        int max_len = lzav_compress_bound(sizeof(AllConfigs));
+        int comp_len = lzav_compress_default(&AllConfigs, COMPRESS_BUFFER, sizeof(AllConfigs), max_len);
 
         fwrite(&comp_len, sizeof(comp_len), 1, fp);
         fwrite(COMPRESS_BUFFER, comp_len, 1, fp);

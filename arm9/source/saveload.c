@@ -301,15 +301,15 @@ void msxSaveState(void)
         // --------------------------------------------------------------------------------------------
         // Compress the 256K RAM data using 'high' compression ratio... We do this in two 128K chunks.
         // --------------------------------------------------------------------------------------------
-        int max_len = lzav_compress_bound_hi( 0x20000 );
-        int comp_len = lzav_compress_hi( RAM_Memory, COMPRESS_BUFFER, 0x20000, max_len );
+        int max_len = lzav_compress_bound( 0x20000 );
+        int comp_len = lzav_compress_default( RAM_Memory, COMPRESS_BUFFER, 0x20000, max_len );
         if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
         if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
 
         // --------------------------------------------------------------------------------------------
         // Compress the 256K RAM data using 'high' compression ratio... We do this in two 128K chunks.
         // --------------------------------------------------------------------------------------------
-        comp_len = lzav_compress_hi( RAM_Memory+0x20000, COMPRESS_BUFFER, 0x20000, max_len );
+        comp_len = lzav_compress_default( RAM_Memory+0x20000, COMPRESS_BUFFER, 0x20000, max_len );
         if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
         if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
 
@@ -321,7 +321,7 @@ void msxSaveState(void)
             // Do this in 128K chunks... DSi has 1MB, DS-Lite has 512K
             for (int i=0; i < (isDSiMode() ? 8:4); i++)
             {
-                comp_len = lzav_compress_hi( ROM_Memory+((MAX_CART_SIZE_KB/2)*1024)+(i*0x20000), COMPRESS_BUFFER, 0x20000, max_len );
+                comp_len = lzav_compress_default( ROM_Memory+((MAX_CART_SIZE_KB/2)*1024)+(i*0x20000), COMPRESS_BUFFER, 0x20000, max_len );
                 if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
                 if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
             }
@@ -330,8 +330,8 @@ void msxSaveState(void)
         // -----------------------------------------------------------------------
         // Compress the 128K VRAM data using 'high' compression ratio...
         // -----------------------------------------------------------------------
-        max_len = lzav_compress_bound_hi( sizeof(VDP_Memory) );
-        comp_len = lzav_compress_hi( VDP_Memory, COMPRESS_BUFFER, sizeof(VDP_Memory), max_len );
+        max_len = lzav_compress_bound( sizeof(VDP_Memory) );
+        comp_len = lzav_compress_default( VDP_Memory, COMPRESS_BUFFER, sizeof(VDP_Memory), max_len );
         if (retVal) retVal = fwrite(&comp_len,           sizeof(comp_len),  1, handle);
         if (retVal) retVal = fwrite(COMPRESS_BUFFER,     comp_len,          1, handle);
 
