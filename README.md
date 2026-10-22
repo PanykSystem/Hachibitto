@@ -91,6 +91,18 @@ When zoomed, use the Left/Right shoulder buttons to pan the screen left and righ
 
 ![Screen Zoom](images/zoom.jpg)
 
+Box Artwork :
+-----------------------
+Artwork must be a standard PNG file of 256 pixels wide... and any height up to 512 pixels tall. It looks for artwork in one of 4 places: /roms/art, /roms/msx/art, /data/art or the same directory as the ROM/Game file.
+
+The .png file must have the same base filename as the ROM/Disk/Game (e.g. if the game is "Aleste (Compile).bin" the artwork would be "Aleste (Compile).png"
+
+This lets cartridges show on a single screen or box art show with auto-smooth-scrolling up/down so you can see the whole image in glorious 16-bit color.
+
+Pressing the X button will halt the auto-scroll so you can more closely inspect the image.
+
+If no artwork is found for a game, it shows the legacy loading screen with the preview snaps cycling.
+
 
 Known Issues :
 -----------------------
