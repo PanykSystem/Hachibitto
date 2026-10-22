@@ -28,6 +28,7 @@ Features :
 * High Score saving for 10 scores with initials, date/time.
 * Favorites list so you can mark games as 'like' or 'love' - a yellow or red heart icon will mark your favorite games.
 * Solid Z80 core that passes the ZEXDOC test suite (covering everything except undocumented flags which are partially supported for the few games that need them).
+* Game artwork (box cover, etc) is supported - use PNG files of 256 pixels wide by up to 512 pixels tall and place in /roms/art or /roms/msx/art (or same directory as game).
 * Minimal design aesthetic - pick game, play game. Runs unpatched from your SD card via TWL++ or similar.
 
 Copyright :
@@ -94,6 +95,7 @@ When zoomed, use the Left/Right shoulder buttons to pan the screen left and righ
 Known Issues :
 -----------------------
 * MSX-MUSIC is complicated and consumes quite a bit of the DS CPU horsepower. As such, the Yamaha YM2413 / OPLL implementation is vastly simplified. It only runs full-speed on the DSi or above with the 2X CPU. Do not judge MSX-MUSIC harshly based on this emulator's ability.
+* The DS-Lite/Phat do not have enough CPU horsepower to handle this implementation of MSX-MUSIC so by default the standard PSG (or SCC if the game supports it) will be used instead.
 * Manbow 2 has some minor glitching when using save/continue functionality. Does not affect gameplay.
 
 The Hachibitto HB-8 Fantasy Console :
@@ -108,6 +110,13 @@ The Hachibitto HB-8 Fantasy Console :
 
 Version History :
 -----------------------
+Version 1.6 - 22-Oct-2026 by wavemotion-dave
+* Fix for 16K carts that are not found in the database.
+* MSX-MUSIC optimization to improve speed so all games sustain 60fps on DSi/XL/LL.
+* MSX Box Artwork supported.
+* PSG logo/icon added - can be enabled in Global Configuration.
+* Minor cleanup and refactor across the board.
+
 Version 1.5 - 17-Oct-2026 by wavemotion-dave
 * Overscan support for the few games that extend beyond the normal 212 scaline limit.
 * Double buffer graphics output to eliminate glitching.

@@ -121,7 +121,7 @@ static   u8 YM_MulTableX2[16] __attribute__((section(".dtcm"))) =
 //@ uses MUL, TL, FB and the operator envelope rates/levels; other parameters
 //@ are decoded but are not all modeled yet.
 //@----------------------------------------------------------------------------
-YM_Instrument YM_InstrumentROM[16] __attribute__((section(".dtcm"))) =
+YM_Instrument YM_InstrumentROM[16] =
 {
     /*  0 unused/custom */ { 9,12, 0,0, 1,1, 0,0, 0,0, 1,0, 12, 0,1, 2, 0,0,0,0,   0,0,0,0  },
     /*  1 Violin        */ { 1,1,  0,0, 1,1, 1,1, 0,0, 0,0, 30, 0,1, 7, 15,0,0,0,  7,8,1,7  },
@@ -146,20 +146,22 @@ YM_Instrument YM_InstrumentROM[16] __attribute__((section(".dtcm"))) =
    volume-derived values are calculated when the channel configuration changes. */
 typedef struct
 {
-    u8  arMod, arCar;  // attack: small per-sample step (<< 16 when applied)
-    u8  modAtten;      // TL-derived linear amplitude factor from YM_TLAtten[]
-    u8  modDepth;      // TL-derived phase-deviation scale (see YM_PrecomputeFMRates)
-    u8  fbDepth;       // YM_FM_FBDepth[FB]
-    u8  volume;        // 15 - channel volume
-    u8  waveMod, waveCar; // Custom waveform modes; 0=legacy/default, 1=sine, 2=half-sine
-    u32 drMod, rrMod;  // decay/release per-sample envelope steps (16.16 fixed)
-    u32 drCar, rrCar;
-    u32 slMod, slCar;  // sustain target levels, already << 16
-    u32 susMod, susCar;// extra decay while key held: 0 = hold (EG-TYP=1), else RR step (EG-TYP=0)
+    u8  arMod, arCar;       // attack: small per-sample step (<< 16 when applied)
+    u8  modAtten;           // TL-derived linear amplitude factor from YM_TLAtten[]
+    u8  modDepth;           // TL-derived phase-deviation scale (see YM_PrecomputeFMRates)
+    u8  fbDepth;            // YM_FM_FBDepth[FB]
+    u8  volume;             // 15 - channel volume
+    u8  waveMod, waveCar;   // Custom waveform modes; 0=legacy/default, 1=sine, 2=half-sine
+    u32 drMod, rrMod;       // decay/release per-sample envelope steps (16.16 fixed)
+    u32 drCar, rrCar;       // Carrier decay/release per-sample envelope steps (16.16 fixed)
+    u32 slMod, slCar;       // sustain target levels, already << 16
+    u32 susMod, susCar;     // extra decay while key held: 0 = hold (EG-TYP=1), else RR step (EG-TYP=0)
 } YM_FMParams;
 
 static YM_FMParams YM_FM[YM_NUM_CHANNELS] __attribute__((section(".dtcm")));
 static u8 YM_EnvDiv __attribute__((section(".dtcm")));   // envelope clock divider counter
+static u8 YM_HalfRatePhase __attribute__((section(".dtcm")));
+static s32 YM_HeldMelodicSample __attribute__((section(".dtcm")));
 
 // This should be roughly 0.75dB per step... approx.
 static u8 YM_TLAtten[64] __attribute__((section(".dtcm"))) = {
@@ -277,6 +279,9 @@ void YMReset(YM *chip)
 {
     memset(chip, 0, sizeof(YM));
     chip->noiseLFSR = 1; // must not be seeded with 0, or the LFSR locks up
+    YM_EnvDiv = 0;
+    YM_HalfRatePhase = 0;
+    YM_HeldMelodicSample = 0;
     int ch;
     for (ch = 0; ch < YM_NUM_CHANNELS; ch++)
     {
@@ -724,8 +729,8 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     s32 modGain = 255 - (s32)(osc->modEnv >> 16);
     mod = (mod * modGain) >> 8;
 
-    // TL-derived modulator attenuation, feedback depth and FM deviation are
-    // precomputed per channel. KSL is not currently applied by this approximation.
+    // TL-derived modulator attenuation is precomputed per channel. KSL is not
+    // currently applied by this approximation.
     mod = (mod * p->modAtten) >> 8;
 
     // Feedback is deliberately kept small.  The carrier phase table has 256
@@ -760,6 +765,9 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     carrier = (carrier * (255 - (s32)(osc->carEnv >> 16))) >> 7;
     carrier = (carrier * p->volume) >> 7;
 
+    osc->modPhase += osc->modPhaseIncrement;
+    osc->phase += osc->phaseIncrement;
+
     // Apply the configured YM output level after channel-volume attenuation.
     return carrier << (myConfig.ymScale + 1);
 }
@@ -769,8 +777,8 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
 // number of music channels that need to be handled. In ITCM to help speed.
 // -------------------------------------------------------------------------
 // -------------------------------------------------------------------------
-// Mixer: render every output sample independently.
-// No duplicated samples or averaging.
+// Mixer: melodic FM is rendered at half the output rate; rhythm and filtering
+// remain at the full output rate.
 // -------------------------------------------------------------------------
 ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
 {
@@ -780,27 +788,34 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
 
     for (i = 0; i < len; i++)
     {
-        s32 sample = 0;
+        s32 sample = YM_HeldMelodicSample;
 
-        /* Envelope clock divider (persists across calls, not part of save state). */
-        u8 doEnv = ((++YM_EnvDiv) & ((1 << YM_ENV_DIV_SHIFT) - 1)) == 0;
-
-        /* Melodic 2-op FM */
-        for (int ch = 0; ch < lastMelodic; ch++)
+        if (!YM_HalfRatePhase)
         {
-            YM_Channel *cc = &chip->channels[ch];
+            s32 melodicSample = 0;
+            u8 doEnv = ((++YM_EnvDiv) & ((1 << (YM_ENV_DIV_SHIFT - 1)) - 1)) == 0;
 
-            if (!cc->keyOn && cc->osc.gain == 0)
+            /* Melodic 2-op FM */
+            for (int ch = 0; ch < lastMelodic; ch++)
             {
-                continue;
+                YM_Channel *cc = &chip->channels[ch];
+
+                if (!cc->keyOn && cc->osc.gain == 0)
+                {
+                    continue;
+                }
+
+                melodicSample += YM_RenderChannel2FM(
+                    &cc->osc,
+                    cc->keyOn,
+                    ch,
+                    doEnv);
             }
 
-            sample += YM_RenderChannel2FM(
-                &cc->osc,
-                cc->keyOn,
-                ch,
-                doEnv);
+            sample = (YM_HeldMelodicSample + melodicSample) >> 1;
+            YM_HeldMelodicSample = melodicSample;
         }
+        YM_HalfRatePhase ^= 1;
 
         /*
          * Rhythm

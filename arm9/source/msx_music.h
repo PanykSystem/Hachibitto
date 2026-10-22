@@ -32,6 +32,11 @@
 //      LINEAR in amplitude rather than the OPLL's logarithmic (dB) curve, so
 //      YM_RATE_BASE is tuned by ear to compensate. Attack is a simpler
 //      approximation and is not hardware-accurate.
+//    - Melodic FM is rendered at half the output sample rate, with oscillator
+//      phases advancing by two sample steps. A simple linear midpoint between
+//      adjacent rendered samples softens the skipped sample. This intentionally
+//      trades some temporal detail and sound quality for lower mixer CPU use.
+//      Rhythm and output filtering continue at the full output rate.
 //    - Sustain levels (SL) use a table matching the OPLL's 3 dB steps.
 //      Preset carriers use a soft-square lookup; custom carriers use the
 //      selected sine waveform.
@@ -81,7 +86,7 @@
 //@----------------------------------------------------------------------------
 typedef struct
 {
-    u8 mulMod, mulCar;              // $00/$01 D3-0 - operator multipliers (FM path)
+    u8 mulMod, mulCar;             // $00/$01 D3-0 - operator multipliers (FM path)
     u8 amMod,  amCar;              // $00/$01 D7 - decoded; AM not currently modeled
     u8 vibMod, vibCar;             // $00/$01 D6 - decoded; VIB not currently modeled
     u8 egTypeMod, egTypeCar;       // $00/$01 D5 - decoded; EG-TYP behavior not modeled
