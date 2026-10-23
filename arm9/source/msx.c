@@ -1086,7 +1086,7 @@ ITCM_CODE void cpu_writeport_msx(register u8 Port,register unsigned char Value)
     {
         if (++msx_music_writes == 10) // Arbitrary... if we hit it at least 10 times, we turn on MSX MUSIC output
         {
-            if (myConfig.expansion == EXP_FM_PAC)
+            if ((myConfig.expansion == EXP_FM_PAC) || (myConfig.expansion == EXP_MEGARAM))
             {
                 msx_music_capable_game = 1;
                 bClickRemoveNeeded = 1;
@@ -1750,8 +1750,8 @@ void MSX_InitialMemoryLayout(void)
 
         MSXCartPtr[MEDIA_CART2][0] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][1] = (u8*)Unmapped_Memory;           // Segment Unmapped
-        MSXCartPtr[MEDIA_CART2][2] = (u8*)MSXBios_FMPAC + 0x0000; // 4000-5FFF -> MSX-MUSIC / FM-PAC BIOS
-        MSXCartPtr[MEDIA_CART2][3] = (u8*)MSXBios_FMPAC + 0x2000; // 6000-7FFF -> MSX-MUSIC / FM-PAC BIOS
+        MSXCartPtr[MEDIA_CART2][2] = (u8*)MSXBios_FMPAC + 0x0000;    // 4000-5FFF -> MSX-MUSIC / FM-PAC BIOS
+        MSXCartPtr[MEDIA_CART2][3] = (u8*)MSXBios_FMPAC + 0x2000;    // 6000-7FFF -> MSX-MUSIC / FM-PAC BIOS
         MSXCartPtr[MEDIA_CART2][4] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][5] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][6] = (u8*)Unmapped_Memory;           // Segment Unmapped
@@ -1759,7 +1759,7 @@ void MSX_InitialMemoryLayout(void)
 
         msxLoadSRAM();  // FM-PAC with MSX-MUSIC also has 8K of SRAM
     }
-    if (myConfig.expansion == EXP_MEGARAM) // MEGARAM has both system RAM and SCC capable mapping
+    if (myConfig.expansion == EXP_MEGARAM) // MEGARAM has both system RAM and SCC + MSX-MUSIC capable mapping
     {
         MyMedia[MEDIA_CART2].mapperMask = 0;
         MyMedia[MEDIA_CART2].blockSize = 0x2000;
@@ -1767,8 +1767,8 @@ void MSX_InitialMemoryLayout(void)
 
         MSXCartPtr[MEDIA_CART2][0] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][1] = (u8*)Unmapped_Memory;           // Segment Unmapped
-        MSXCartPtr[MEDIA_CART2][2] = (u8*)Unmapped_Memory;           // Segment Unmapped
-        MSXCartPtr[MEDIA_CART2][3] = (u8*)Unmapped_Memory;           // Segment Unmapped
+        MSXCartPtr[MEDIA_CART2][2] = (u8*)MSXBios_FMPAC + 0x0000;    // 4000-5FFF -> MSX-MUSIC / FM-PAC BIOS
+        MSXCartPtr[MEDIA_CART2][3] = (u8*)MSXBios_FMPAC + 0x2000;    // 6000-7FFF -> MSX-MUSIC / FM-PAC BIOS
         MSXCartPtr[MEDIA_CART2][4] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][5] = (u8*)Unmapped_Memory;           // Segment Unmapped
         MSXCartPtr[MEDIA_CART2][6] = (u8*)Unmapped_Memory;           // Segment Unmapped

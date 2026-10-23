@@ -1447,23 +1447,23 @@ const struct options_t Option_Table[2][20] =
     // Page 1 - Game Options
     {
         {"MSX MAPPER",      {"GUESS", "MIRRORED", "KONAMI 8K", "ASCII 8K", "KONAMI SCC", "ASCII 16K", "GENERIC 8K", "GENERIC 16K", "ASC8 SRAM 2K", "ASC8 SRAM 8K", "ASC16 SRAM 2K",
-                             "ASC16 SRAM 8K", "CROSSBLAIM", "LODERUNNER", "XEVIOUS", "AT 0000H",  "AT 4000H", "AT 8000H", "64K LINEAR", "PAGE2", "NORMAL 8K/16K"},      &myConfig.msxMapper,    21},
-        {"MACHINE TYPE",    {"MSX2 - NORMAL", "MSX1 - LEGACY"},                                                                                                         &myConfig.machineType,  2},
-        {"KEYBOARD",        {"FULL KEYBOARD", "ALPHA KEYBOARD"},                                                                                                        &myConfig.keyboard,     2},
-        {"MAX SPRITES",     {"4/8 PER LINE", "32 PER LINE"},                                                                                                            &myConfig.maxSprites,   2},
-        {"AUTO FIRE",       {"OFF", "B1 ONLY", "B2 ONLY", "BOTH"},                                                                                                      &myConfig.autoFire,     4},
-        {"JOYSTICK",        {"NORMAL", "DIAGONALS", "ARKANOID", "SLIDE-N-GLILDE"},                                                                                      &myConfig.dpad,         4},
-        {"SPLIT TIMING",    {"0 LINES", "1 LINE", "2 LINES"},                                                                                                           &myConfig.splitRefresh, 3},
-        {"CPU SPEED",       {"NORMAL", "BOOSTED 10%", "BOOSTED 20%"},                                                                                                   &myConfig.cpuBoost,     3},
-        {"EXPANSION",       {"NONE", "FM-PAC", "SCC+ (SCC-I)", "2x PSG", "BEEPER", "MEGARAM SCC"},                                                                      &myConfig.expansion,    6},
-        {"SCREEN SCALE",    {"NONE", "COMPRESSED"},                                                                                                                     &myConfig.scaleScreen,  2},
-        {"BORDER MASK",     {"NONE", "LEFT", "RIGHT", "LEFT + RIGHT"},                                                                                                  &myConfig.maskBorders,  4},
-        {"FRAMESKIP",       {"NONE", "LIGHT", "AGGRESSIVE"},                                                                                                            &myConfig.frameSkip,    3},
-        {"YM BALANCE",      {"LOW", "MEDIUM", "HIGH", "MAX"},                                                                                                           &myConfig.ymScale,      4},
-        {"VDP OVERSCAN",    {"OFF", "ENABLED"},                                                                                                                         &myConfig.overscan,     2},
-        {"Y OFFSET",        {"None", "+1", "+2", "+3", "+4", "+5", "+6", "+7", "+8", "+9", "+10", "+11", "+12", "+13", "+14", "+15", "+16", "+17", "+18", "+19",
-                             "+20", "+21", "+22", "+23", "+24", "+25", "+26", "+27", "+28", "+29", "+30", "+31", "+32"},                                                &myConfig.yOffset,      33},
-        {NULL,              {"", ""},                                                                                                                                   NULL,                   1},
+                             "ASC16 SRAM 8K", "CROSSBLAIM", "LODERUNNER", "XEVIOUS", "AT 0000H",  "AT 4000H", "AT 8000H", "64K LINEAR", "PAGE2", "NORMAL 8K/16K"},      &myConfig.msxMapper,         21},
+        {"MACHINE TYPE",    {"MSX2 - NORMAL", "MSX1 - LEGACY"},                                                                                                         &myConfig.machineType,       2},
+        {"KEYBOARD",        {"FULL KEYBOARD", "ALPHA KEYBOARD"},                                                                                                        &myConfig.keyboard,          2},
+        {"MAX SPRITES",     {"4/8 PER LINE", "32 PER LINE"},                                                                                                            &myConfig.maxSprites,        2},
+        {"AUTO FIRE",       {"OFF", "B1 ONLY", "B2 ONLY", "BOTH"},                                                                                                      &myConfig.autoFire,          4},
+        {"JOYSTICK",        {"NORMAL", "DIAGONALS", "ARKANOID", "SLIDE-N-GLILDE"},                                                                                      &myConfig.dpad,              4},
+        {"SPLIT TIMING",    {"0 LINES", "1 LINE", "2 LINES"},                                                                                                           &myConfig.splitRefresh,      3},
+        {"CPU SPEED",       {"NORMAL", "BOOSTED 25%", "BOOSTED 50%"},                                                                                                   &myConfig.cpuBoost,          3},
+        {"EXPANSION",       {"NONE", "FM-PAC", "SCC+ (SCC-I)", "2x PSG", "BEEPER", "MEGARAM MUSIC"},                                                                    &myConfig.expansion,         6},
+        {"SCREEN SCALE",    {"NONE", "COMPRESSED"},                                                                                                                     &myConfig.scaleScreen,       2},
+        {"BORDER MASK",     {"NONE", "LEFT", "RIGHT", "LEFT + RIGHT"},                                                                                                  &myConfig.maskBorders,       4},
+        {"FRAMESKIP",       {"NONE", "LIGHT", "AGGRESSIVE"},                                                                                                            &myConfig.frameSkip,         3},
+        {"YM BALANCE",      {"LOW", "MEDIUM", "HIGH", "MAX"},                                                                                                           &myConfig.ymScale,           4},
+        {"VDP OVERSCAN",    {"OFF", "ENABLED"},                                                                                                                         &myConfig.overscan,          2},
+        {"Y OFFSET",        {"None", "+1", "+2", "+3", "+4", "+5", "+6", "+7", "+8", "+9", "+10", "+11", "+12", "+13", "+14", "+15", "+16", "+17", "+18", "+19",     
+                             "+20", "+21", "+22", "+23", "+24", "+25", "+26", "+27", "+28", "+29", "+30", "+31", "+32"},                                                &myConfig.yOffset,           33},
+        {NULL,              {"", ""},                                                                                                                                   NULL,                        1},
     },
 
     // Page 2 - Global Options
@@ -1518,6 +1518,7 @@ void HachibittoGameOptions(bool bIsGlobal)
     bool bDone = false;
     int keys_pressed;
     int last_keys_pressed = 999;
+    u8  last_cpu_boost = myConfig.cpuBoost;
 
     option_table_idx = 0;
 
@@ -1608,6 +1609,30 @@ void HachibittoGameOptions(bool bIsGlobal)
         {
             myConfig.yOffset = 0;
             (void)display_options_list(true, optionHighlighted);
+        }
+        
+        // -----------------------------------------------------------------------
+        // As we boost the CPU power, we need less scanline refresh to compensate.
+        // -----------------------------------------------------------------------
+        if (myConfig.cpuBoost != last_cpu_boost)
+        {
+            if (myConfig.cpuBoost == 0) // No CPU boost
+            {
+                myConfig.splitRefresh = 2;
+                (void)display_options_list(true, optionHighlighted);
+            }
+            if (myConfig.cpuBoost == 1) // 25% we limit the Scanline Refresh
+            {
+                myConfig.splitRefresh = 1;
+                (void)display_options_list(true, optionHighlighted);
+            }
+            if (myConfig.cpuBoost == 2) // 50% we limit the Scanline Refresh more
+            {
+                myConfig.splitRefresh = 0;
+                (void)display_options_list(true, optionHighlighted);
+            }
+            
+            last_cpu_boost = myConfig.cpuBoost;
         }
 
         ShowRandomPreviewSnaps();
@@ -1836,6 +1861,9 @@ void DisplayFileNames(void)
 {
     for (int id = 0; id < (MEDIA_DISK + 1); id++)
     {
+        // ------------------------------------------------------------------------------
+        // If we are using one of the EXPANSION carts... put up the logo/icon in slot 2
+        // ------------------------------------------------------------------------------
         if (MyMedia[id].filecrc == 0xFFFFFFFF)
         {
             if (strcmp(MyMedia[id].filename, "FM-PAC") == 0)
@@ -1848,13 +1876,13 @@ void DisplayFileNames(void)
                 DSPrint(6, 4 + (5 * id) + 0, 2, "-./0123");
                 DSPrint(6, 5 + (5 * id) + 0, 2, "MNOPQRS");
             }
-            else if (strcmp(MyMedia[id].filename, "MEGARAM SCC") == 0)
+            else if (strcmp(MyMedia[id].filename, "MEGARAM MUSIC") == 0)
             {
                 DSPrint(5, 4 + (5 * id) + 0, 4, "!\"#$%&'()*+,-./012345");
                 DSPrint(5, 5 + (5 * id) + 0, 4, "ABCDEFGHIJKLMNOPQRS");
 
-                DSPrint(25, 4 + (5 * id) + 0, 2, "-./01");
-                DSPrint(25, 5 + (5 * id) + 0, 2, "MNOPQ");
+                DSPrint(25, 4 + (5 * id) + 0, 2, "45678");
+                DSPrint(25, 5 + (5 * id) + 0, 2, "TUVWX");
             }
         }
         else
@@ -1895,8 +1923,8 @@ void DisplayFileNames(void)
             }
         }
 
-        // If a game is loaded into a slot, we show a red X icon so the user can remove it...
-        if ((MyMedia[id].filecrc != 0) && (MyMedia[id].filecrc != 0xFFFFFFFF)) // 0xFFFFFFFF is for SCC+ cart
+        // If a game is loaded into a slot, we show a blue X icon so the user can 'eject' it...
+        if ((MyMedia[id].filecrc != 0) && (MyMedia[id].filecrc != 0xFFFFFFFF)) // 0xFFFFFFFF is for one of the expansion carts
         {
             DSPrint(30, 4 + (5 * id) + 0, 2, "!\"");
             DSPrint(30, 4 + (5 * id) + 1, 2, "AB");
@@ -2000,7 +2028,7 @@ void CheckIfGameHasMusicMapper(void)
     {
         // If the new Config tells us this is an MEGARAM SCC cart, that slides into CART2
         memset(&MyMedia[MEDIA_CART2], 0x00, sizeof(MyMedia[MEDIA_CART2]));
-        strcpy(MyMedia[MEDIA_CART2].filename, "MEGARAM SCC");
+        strcpy(MyMedia[MEDIA_CART2].filename, "MEGARAM MUSIC");
         MyMedia[MEDIA_CART2].filecrc = 0xFFFFFFFF;
     }
     else if (MyMedia[MEDIA_CART2].filecrc == 0xFFFFFFFF) // Was music mapped in?
@@ -2224,9 +2252,7 @@ void DSPrint(int iX, int iY, int iScr, char *szMessage)
     char *pTrTxt = szMessage;
 
     pusScreen = (u16 *)(iScr != 1 ? bgGetMapPtr(bg1b) : bgGetMapPtr(bg1)) + iX + (iY << 5);
-    pusMap = (u16 *)(iScr != 1 ? (iScr == 6 ? bgGetMapPtr(bg0b) + 24 * 32 : (iScr == 0 ? bgGetMapPtr(bg0b) + 24 * 32 : (iScr == 4) ? bgGetMapPtr(bg0b) + 28 * 32
-                                                                                                                                   : bgGetMapPtr(bg0b) + 26 * 32))
-                               : bgGetMapPtr(bg0) + 51 * 32);
+    pusMap = (u16 *)(iScr != 1 ? (iScr == 6 ? bgGetMapPtr(bg0b) + 24 * 32 : (iScr == 0 ? bgGetMapPtr(bg0b) + 24 * 32 : (iScr == 4) ? bgGetMapPtr(bg0b) + 28 * 32 : bgGetMapPtr(bg0b) + 26 * 32)) : bgGetMapPtr(bg0) + 51 * 32);
 
     while ((*pTrTxt) != '\0')
     {
