@@ -2950,9 +2950,6 @@ void ProcessBufferedKeys(void)
  ********************************************************************************/
 void msxInit(void)
 {
-    u8 uBcl;
-    u16 uVide;
-
     // We've got some debug data we can use for development... reset these.
     memset(debug, 0x00, sizeof(debug));
     DX = DY = 0;
@@ -2992,14 +2989,8 @@ void msxInit(void)
     REG_BG3X = 0;
     REG_BG3Y = 0;
 
-    // Init the page flipping buffer...
-    for (uBcl = 0; uBcl < 255; uBcl++)
-    {
-        uVide = 0;
-        dmaFillWords(uVide | (uVide << 16), DS_LCD_VRAM_1 + uBcl * 128, 256);
-        dmaFillWords(uVide | (uVide << 16), DS_LCD_VRAM_2 + uBcl * 128, 256);
-    }
-
+    memset((u8 *)0x06000000, 0x00, 0x40000); // Ensure screen is clear... (LCD_A and LCD_B)    
+    
     // Wipe RAM area for the MSX
     msxWipeRAM();
 

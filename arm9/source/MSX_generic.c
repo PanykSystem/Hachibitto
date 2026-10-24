@@ -577,7 +577,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
     s16 dampen = 0;
     s16 dwell = 60;
     u8 bShowPreviewSnaps = 1;
-    u8 dampen_boxart = 10;
+    u8 dampen_boxart = 15;
 
     // Show the menu...
     while ((keysCurrent() & (KEY_TOUCH | KEY_START | KEY_SELECT | KEY_A | KEY_B)) != 0)
@@ -621,7 +621,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
     {
         if (keysCurrent() & KEY_UP)
         {
-            dampen_boxart = 10;
+            dampen_boxart = 15;
             if (!ucHaut)
             {
                 ucGameAct = (ucGameAct > 0 ? ucGameAct - 1 : countMSX - 1);
@@ -669,7 +669,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
         }
         if (keysCurrent() & KEY_DOWN)
         {
-            dampen_boxart = 10;
+            dampen_boxart = 15;
             if (!ucBas)
             {
                 ucGameAct = (ucGameAct < countMSX - 1 ? ucGameAct + 1 : 0);
@@ -721,7 +721,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
         // -------------------------------------------------------------
         if (keysCurrent() & KEY_RIGHT)
         {
-            dampen_boxart = 10;
+            dampen_boxart = 15;
             if (!ucSBas)
             {
                 ucGameAct = (ucGameAct < countMSX - nbRomPerPage ? ucGameAct + nbRomPerPage : countMSX - nbRomPerPage);
@@ -762,7 +762,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
         // -------------------------------------------------------------
         if (keysCurrent() & KEY_LEFT)
         {
-            dampen_boxart = 10;
+            dampen_boxart = 15;
             if (!ucSHaut)
             {
                 ucGameAct = (ucGameAct > nbRomPerPage ? ucGameAct - nbRomPerPage : 0);
@@ -1155,6 +1155,7 @@ static const GameTweak gameTweaks[] =
     {"MASTER 3",        NULL,                EXP_FM_PAC,  TWEAK_NONE,     TWEAK_NONE, TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE},
     {"MASTER III",      NULL,                EXP_FM_PAC,  TWEAK_NONE,     TWEAK_NONE, TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE},
     {"XEVIOUS",         NULL,                EXP_FM_PAC,  TWEAK_NONE,     TWEAK_NONE, TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE},
+    {"RANDAR",          NULL,                EXP_FM_PAC,  TWEAK_NONE,     TWEAK_NONE, TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE},
     {"R-TYPE",          NULL,                EXP_FM_PAC,  TWEAK_NONE,     TWEAK_NONE, TWEAK_NONE,    TWEAK_NONE,         TWEAK_NONE},
 
     // D-Pad

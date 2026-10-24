@@ -62,14 +62,13 @@ static u8 YM_SustainGain[16] __attribute__((section(".dtcm"))) =
                        // The FM path scales its output separately.
                        
 /* Extra modulator-depth shift per ROM preset (0 = global depth). Index 0 = custom patch. */
-static u8 YM_PresetFMExtra[16] __attribute__((section(".dtcm"))) =
-    { 0, 0,0,0,0,0,0,0,0,0,0, 2, 0,0,0,0 };   // 11 = Harpsichord
+static u8 YM_PresetFMExtra[16] __attribute__((section(".dtcm"))) = { 0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0 };   // 11 = Harpsichord (dampen for Aleste)
 
 //@----------------------------------------------------------------------------
 //@ 256-entry soft-square-like carrier waveform table, amplitude -127..127.
 //@ The modulator uses a separate sine table.
 //@----------------------------------------------------------------------------
-static   s8 YM_SinTable[256] __attribute__((section(".dtcm"))) =
+static s8 YM_SineTable[256] __attribute__((section(".dtcm"))) =
 {
        0,   13,   27,   39,   52,   64,   75,   85,   94,  102,  109,  115,  119,  123,  125,  127,
      127,  127,  125,  124,  121,  119,  116,  113,  110,  107,  104,  101,   99,   98,   97,   96,
@@ -91,10 +90,10 @@ static   s8 YM_SinTable[256] __attribute__((section(".dtcm"))) =
 
 /*
  * Sine lookup used by the normal FM path's modulator and by the tonal rhythm
- * voices. It is separate from YM_SinTable (the carrier waveform); the
+ * voices. It is separate from YM_SineTable (the carrier waveform); the
  * tables are not blended. Stored in DTCM for fast audio-rate access.
  */
-static   s8 YM_CarrierSineTable[256] __attribute__((section(".dtcm"))) =
+static s8 YM_CarrierSineTable[256] __attribute__((section(".dtcm"))) =
 {
       0,   3,   6,   9,  12,  16,  19,  22,  25,  28,  31,  34,  37,  40,  43,  46,
      49,  51,  54,  57,  60,  63,  65,  68,  71,  73,  76,  78,  81,  83,  85,  88,
@@ -807,7 +806,7 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     s32 carrier;
     if (p->waveCar == 0)
     {
-        carrier = YM_SinTable[carrierIndex];
+        carrier = YM_SineTable[carrierIndex];
     }
     else
     {
@@ -903,7 +902,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 {
                     bd->osc.phase += bd->osc.phaseIncrement;
 
-                    s32 s = YM_SinTable[(bd->osc.phase >> YM_SIN_SHIFT) & 0xFF];
+                    s32 s = YM_SineTable[(bd->osc.phase >> YM_SIN_SHIFT) & 0xFF];
 
                     sample +=
                         (s *
@@ -925,7 +924,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 {
                     tt->osc.phase += tt->osc.phaseIncrement;
 
-                    s32 s = YM_SinTable[(tt->osc.phase >> YM_SIN_SHIFT) & 0xFF];
+                    s32 s = YM_SineTable[(tt->osc.phase >> YM_SIN_SHIFT) & 0xFF];
 
                     sample +=
                         (s *
@@ -966,7 +965,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                     (((cymPhase >> 3) & 1) ^ ((cymPhase >> 5) & 1));
 
 #define YM_RHYTHM_WAVE(p) \
-    YM_SinTable[((p) >> 2) & 0xFF]
+    YM_SineTable[((p) >> 2) & 0xFF]
 
                 /* Hi-Hat */
                 if (hs->osc.gain != 0)
