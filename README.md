@@ -122,6 +122,13 @@ The Hachibitto HB-8 Fantasy Console :
 
 Version History :
 -----------------------
+Version 1.6b - 24-Oct-2026 by wavemotion-dave
+* Fix for frameskip (mostly DS-Lite) so it runs at proper rate.
+* Improved MSX-MUSIC to include Vibrato - shimmer effects now present.
+* MEGARAM MUSIC replaces MEGARAM SCC and includes both SCC and MSX-MUSIC.
+* CPU Boost is now 25% and 50% (the later mimics the late-era Panasonic MSX2+ machines)
+* Cleanup across the board.
+
 Version 1.6 - 22-Oct-2026 by wavemotion-dave
 * Fix for 16K carts that are not found in the database.
 * MSX-MUSIC optimization to improve speed so all games sustain 60fps on DSi/XL/LL.

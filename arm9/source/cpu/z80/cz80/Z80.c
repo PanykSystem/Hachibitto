@@ -336,7 +336,7 @@ static void CodesDDCB(void)
   /* Get offset, read opcode and count cycles */
   J.W=CPU.XX.W+(offset)OpZ80(CPU.PC.W++);
   I=OpZ80(CPU.PC.W++);
-  CPU.ICount-=CyclesXXCB[I];
+  CPU.ICount-= (((I & 0xC0) == 0x40) ? 20 : 23);
 
   switch(I)
   {
@@ -354,7 +354,7 @@ static void CodesFDCB(void)
   /* Get offset, read opcode and count cycles */
   J.W=CPU.XX.W+(offset)OpZ80(CPU.PC.W++);
   I=OpZ80(CPU.PC.W++);
-  CPU.ICount-=CyclesXXCB[I];
+  CPU.ICount-= (((I & 0xC0) == 0x40) ? 20 : 23);
 
   switch(I)
   {

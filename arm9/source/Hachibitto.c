@@ -1723,7 +1723,7 @@ void HachibittoRunEmu(void)
             // -----------------------------------------------------
             while (dsVSyncCount == last_vsync_count)
             {
-                if ((myGlobalConfig.showFPS == 2) || skip_render)
+                if (myGlobalConfig.showFPS == 2)
                 {
                     break; // If Full Speed, break out...
                 }

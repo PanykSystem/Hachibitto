@@ -31,8 +31,7 @@
 #define YM_MASTER_CLOCK 3579545         // MSX standard clock, same as SCC's
 #define YM_SIN_SHIFT 24                 // phase>>24 -> 8-bit (256 entry) table index
 #define YM_GAIN_RAMP_STEP 16            // Gain ramp toward full level on key-on.
-#define YM_PERCUSSION_RELEASE_STEP 7780 // PERCUSSION release rate: higher = faster decay
-                                        // for more distinct drum hits.
+#define YM_PERCUSSION_RELEASE_STEP 3500 // PERCUSSION release rate: higher = faster decay for more distinct drum hits.
 
 /* FM envelope: 32-bit fixed point, 16 fractional bits.
    0 = full level, YM_ENV_SILENT = silent.  Amplitude = 255 - (env >> 16). */
@@ -52,12 +51,18 @@
 
 /* Linear amplitude factors for the OPLL's 3 dB-per-step channel volume. */
 static u8 YM_SustainGain[16] __attribute__((section(".dtcm"))) =
-    {
-        255, 181, 128, 90, 64, 45, 32, 22, 16, 11, 8, 5, 4, 2, 1, 0};
+{
+    255, 181, 128, 90, 64, 45, 32, 22, 16, 11, 8, 5, 4, 2, 1, 0
+};
+
 #define YM_SUSTAIN_TICK_SAMPLES 64 // Samples between sustain-level gain reductions
 
 #define YM_OUT_SHIFT 8 // Output scaling for the mixer and rhythm paths.
                        // The FM path scales its output separately.
+                       
+/* Extra modulator-depth shift per ROM preset (0 = global depth). Index 0 = custom patch. */
+static u8 YM_PresetFMExtra[16] __attribute__((section(".dtcm"))) =
+    { 0, 0,0,0,0,0,0,0,0,0,0, 2, 0,0,0,0 };   // 11 = Harpsichord
 
 //@----------------------------------------------------------------------------
 //@ 256-entry soft-square-like carrier waveform table, amplitude -127..127.
@@ -148,8 +153,9 @@ typedef struct
 {
     u8  arMod, arCar;       // attack: small per-sample step (<< 16 when applied)
     u8  modAtten;           // TL-derived linear amplitude factor from YM_TLAtten[]
-    u8  modDepth;           // TL-derived phase-deviation scale (see YM_PrecomputeFMRates)
-    u8  fbDepth;            // YM_FM_FBDepth[FB]
+    u16 fbDepth;            // YM_FM_FBDepth[FB] (phase units at full-scale feedback)
+    u8  vibMod, vibCar;     // VIB bits: apply the vibrato LFO to that operator
+    u8  modShift, fbShift;  // per-channel FM depth shifts (higher notes get less FM: less aliasing)
     u8  volume;             // 15 - channel volume
     u8  waveMod, waveCar;   // Custom waveform modes; 0=legacy/default, 1=sine, 2=half-sine
     u32 drMod, rrMod;       // decay/release per-sample envelope steps (16.16 fixed)
@@ -162,6 +168,27 @@ static YM_FMParams YM_FM[YM_NUM_CHANNELS] __attribute__((section(".dtcm")));
 static u8 YM_EnvDiv __attribute__((section(".dtcm")));   // envelope clock divider counter
 static u8 YM_HalfRatePhase __attribute__((section(".dtcm")));
 static s32 YM_HeldMelodicSample __attribute__((section(".dtcm")));
+
+/* Modulator depth. The real chip swings the carrier phase by about +/-4pi at
+   TL=0. 14 = real chip, 15 = half (default), 16 = quarter. If FM sounds gritty
+   (melodic FM renders at half rate, so strong sidebands alias), raise it. */
+#define YM_MOD_INDEX_SHIFT 17
+
+/* Feedback depth. 7 = real chip, 9 = quarter (default), 20 = effectively off. */
+#define YM_FB_SHIFT 9
+
+/* Blocks above this get progressively less FM depth (1 shift per block). 7 = off. */
+#define YM_FM_FULL_BLOCK 4
+
+/* Vibrato LFO (~6.4 Hz at the half-rate render), applied only to operators
+   with the VIB bit set. Depth = rate >> YM_VIB_SHIFT per LFO unit (LFO is
+   -2..+2): 9 = about +/-7 cents, 10 = about +/-3.5 cents. */
+#define YM_VIB_SHIFT   9
+#define YM_VIB_PERIOD  303   // render samples per LFO step (8 steps per cycle)
+static s8  YM_VibTable[8] __attribute__((section(".dtcm"))) = { 0, 1, 2, 1, 0, -1, -2, -1 };
+static s8  YM_VibNow  __attribute__((section(".dtcm")));
+static u8  YM_VibPos  __attribute__((section(".dtcm")));
+static u16 YM_VibCnt  __attribute__((section(".dtcm")));
 
 // This should be roughly 0.75dB per step... approx.
 static u8 YM_TLAtten[64] __attribute__((section(".dtcm"))) = {
@@ -282,6 +309,9 @@ void YMReset(YM *chip)
     YM_EnvDiv = 0;
     YM_HalfRatePhase = 0;
     YM_HeldMelodicSample = 0;
+    YM_VibNow = 0;
+    YM_VibPos = 0;
+    YM_VibCnt = 0;
     int ch;
     for (ch = 0; ch < YM_NUM_CHANNELS; ch++)
     {
@@ -476,6 +506,8 @@ void YMWrite(u8 value, u8 address, YM *chip)
     else if (address >= 0x30 && address <= 0x38)
     {
         int ch = address - 0x30;
+        u8 oldInst = chip->channels[ch].instrument;
+                
         chip->channels[ch].instrument = value >> YM_REG_INST_SHIFT;
         chip->channels[ch].volume = value & YM_REG_VOL_MASK;
         chip->channels[ch].instPtr = YM_GetInstrument(chip, chip->channels[ch].instrument);
@@ -497,7 +529,11 @@ void YMWrite(u8 value, u8 address, YM *chip)
             chip->rhythmVolTOM = value >> YM_REG_INST_SHIFT;
             chip->rhythmVolTCY = value & YM_REG_VOL_MASK;
         }
-        YM_UpdateChannelFreq(chip, ch);
+        
+        if (chip->channels[ch].instrument != oldInst)
+            YM_UpdateChannelFreq(chip, ch);   // new MUL values -> new phase increments
+        else
+            YM_PrecomputeFMRates(chip, ch);   // volume-only change        
     }
 }
 
@@ -506,8 +542,8 @@ void YMWrite(u8 value, u8 address, YM *chip)
 //
 // This integer-only approximation is not a cycle-accurate YM2413 core. It models
 // two operators, simplified envelopes, MUL, TL and feedback. Block/KSR influence
-// the approximate envelope-rate calculation; KSL, AM, VIB and EG-TYP are decoded
-// but not currently applied. Rhythm synthesis is handled separately.
+// the approximate envelope-rate calculation; VIB drives a gentle vibrato LFO. KSL, AM
+// and EG-TYP are decoded but not currently applied. Rhythm synthesis is handled separately.
 // =====================================================================================
 
 enum
@@ -523,9 +559,11 @@ static u8 YM_FM_SustainAtten[16] __attribute__((section(".dtcm"))) =
         0, 8, 16, 24, 32, 40, 48, 56,
         64, 72, 80, 88, 96, 104, 112, 127};
 
-static u8 YM_FM_FBDepth[8] __attribute__((section(".dtcm"))) =
+/* Feedback in phase units (256 per cycle) at full-scale modulator output.
+   Real chip: 0, pi/16, pi/8, pi/4, pi/2, pi, 2pi, 4pi. */
+static u16 YM_FM_FBDepth[8] __attribute__((section(".dtcm"))) =
     {
-        0, 2, 4, 8, 16, 32, 64, 96};
+        0, 8, 16, 32, 64, 128, 256, 512};
 
 /* Attack still uses the old small per-sample step (applied << 16). */
 static inline u8 YM_FMRateStepPrecompute(u8 rate, u8 block, u8 ksr)
@@ -597,16 +635,21 @@ static inline void YM_PrecomputeFMRates(YM *chip, int ch)
     p->susMod = 0;
     p->susCar = 0;
 
-    /* YM2413 TL is 0.75 dB per step, not a linear 4/step attenuation.
-       Precompute the corresponding linear amplitude factor.  This is
-       particularly important for patches with a heavily attenuated
-       modulator: the old approximation could effectively erase it. */
+    /* YM2413 TL is 0.75 dB per step: precompute the linear amplitude factor.
+       Modulation depth is applied at full precision in the renderer. */
     p->modAtten = YM_TLAtten[inst->tl & 0x3F];
-    /* TL sets modulator level; do not apply the same attenuation a second
-       time to FM deviation.  Scale the surviving modulator into a useful
-       phase deviation range. */
-
-    p->modDepth = (u8)(8 + ((63 - (inst->tl & 0x3F)) >> 1));
+    /* Melodic FM renders at half rate, so FM sidebands on high notes fold back
+       (alias) into rough, gritty noise. Back the depth off by one shift for
+       every block above YM_FM_FULL_BLOCK. */
+    {
+        u8 extra = (block > YM_FM_FULL_BLOCK) ? (u8)(block - YM_FM_FULL_BLOCK) : 0;
+        p->modShift = YM_MOD_INDEX_SHIFT + extra;
+        p->fbShift = YM_FB_SHIFT + extra;
+        
+        p->modShift += YM_PresetFMExtra[chip->channels[ch].instrument & 15];
+    }
+    p->vibMod = inst->vibMod;
+    p->vibCar = inst->vibCar;
 
     p->fbDepth = YM_FM_FBDepth[inst->fb & 7];
     p->volume = YM_SustainGain[chip->channels[ch].volume & 0x0F]; /* 3 dB/step like the OPLL */
@@ -617,7 +660,7 @@ static inline void YM_PrecomputeFMRates(YM *chip, int ch)
 /* One operator's envelope, advanced one output sample.
    keyEdge = fresh key-on this sample (computed once by the caller so both
    operators restart together). */
-ITCM_CODE static inline void YM_EnvStep(
+ITCM_CODE static __attribute__((noinline)) void YM_EnvStep(
     u32 *env, u8 *state, u8 keyOn, u8 keyEdge,
     u8 arStep, u32 drInc, u32 slTarget, u32 susInc, u32 rrInc)
 {
@@ -718,33 +761,42 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
        deliberately not used for amplitude here. */
     osc->gain = 255;
 
-    osc->modPhase += osc->modPhaseIncrement;
-    osc->phase += osc->phaseIncrement;
+    /* Per-operator increments, with optional vibrato (VIB bit). */
+    u32 pi = osc->phaseIncrement;
+    u32 mi = osc->modPhaseIncrement;
+    if (p->vibCar)
+    {
+        pi += (pi >> YM_VIB_SHIFT) * YM_VibNow;
+    }
+    if (p->vibMod)
+    {
+        mi += (mi >> YM_VIB_SHIFT) * YM_VibNow;
+    }
 
-    s32 mod = YM_CarrierSineTable[(osc->modPhase >> YM_SIN_SHIFT) & 0xFF];
+    osc->modPhase += mi;
+    osc->phase += pi;
+
+    /* Feedback modulates the modulator's own PHASE (as on the real chip). */
+    u32 modIdx = osc->modPhase >> YM_SIN_SHIFT;
+    if (p->fbDepth)
+    {
+        modIdx += (osc->feedback * (s32)p->fbDepth) >> p->fbShift;
+    }
+    s32 mod = YM_CarrierSineTable[modIdx & 0xFF];
     if (p->waveMod && mod < 0)
     {
         mod = 0;
     }
-    s32 modGain = 255 - (s32)(osc->modEnv >> 16);
-    mod = (mod * modGain) >> 8;
 
-    // TL-derived modulator attenuation is precomputed per channel. KSL is not
-    // currently applied by this approximation.
-    mod = (mod * p->modAtten) >> 8;
+    /* Full precision: sine(+/-127) * env(0..255) * TL(0..255) = +/-8.2M, no
+       early truncation. KSL is not applied. */
+    s32 modFull = mod * ((255 - (s32)(osc->modEnv >> 16)) * p->modAtten);
 
-    // Feedback is deliberately kept small.  The carrier phase table has 256
-    // entries, so feeding a raw +/-127 sample back into the index produces
-    // nearly a full-cycle phase jump and sounds like broadband grit.
-    s32 feedback = osc->feedback;
-    if (p->fbDepth)
-    {
-        mod += (feedback * p->fbDepth) >> 10;
-    }
-    osc->feedback = (s16)mod;
+    /* Feedback source = smoothed modulator output (stands in for the chip's
+       two-sample average). */
+    osc->feedback = (s16)((osc->feedback + (modFull >> 16)) >> 1);
 
-    // TL-derived modulation depth is also precomputed.
-    s32 modIndex = (mod * p->modDepth) >> 8;
+    s32 modIndex = modFull >> p->modShift;
 
     u32 carrierIndex = ((osc->phase >> YM_SIN_SHIFT) + modIndex) & 0xFF;
     s32 carrier;
@@ -765,8 +817,8 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
     carrier = (carrier * (255 - (s32)(osc->carEnv >> 16))) >> 7;
     carrier = (carrier * p->volume) >> 7;
 
-    osc->modPhase += osc->modPhaseIncrement;
-    osc->phase += osc->phaseIncrement;
+    osc->modPhase += mi;
+    osc->phase += pi;
 
     // Apply the configured YM output level after channel-volume attenuation.
     return carrier << (myConfig.ymScale + 1);
@@ -794,6 +846,14 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
         {
             s32 melodicSample = 0;
             u8 doEnv = ((++YM_EnvDiv) & ((1 << (YM_ENV_DIV_SHIFT - 1)) - 1)) == 0;
+
+            /* Vibrato LFO step (one tick per rendered sample). */
+            if (++YM_VibCnt >= YM_VIB_PERIOD)
+            {
+                YM_VibCnt = 0;
+                YM_VibPos = (YM_VibPos + 1) & 7;
+                YM_VibNow = YM_VibTable[YM_VibPos];
+            }
 
             /* Melodic 2-op FM */
             for (int ch = 0; ch < lastMelodic; ch++)
