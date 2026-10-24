@@ -53,7 +53,11 @@
 //      mitigations are in place, all precomputed when a channel changes:
 //        1. Global modulator and feedback depth are kept well below the real
 //           chip (YM_MOD_INDEX_SHIFT, YM_FB_SHIFT).
-//        2. Depth and feedback halve for every block above YM_FM_FULL_BLOCK.
+//        2. Both shift by one per block around YM_FM_FULL_BLOCK: high notes get
+//           less FM, low notes get more, so bass keeps its overtones (a bare
+//           low sine is nearly inaudible on the DS speaker). Modulator depth
+//           is floored at shift 16 (the real chip is 14, but that made bass
+//           rumbly) and feedback at 7 (real chip).
 //        3. YM_PresetFMExtra trims modulator depth per ROM preset. Harpsichord
 //           (preset 11, TL=7, the strongest modulator and one that never
 //           decays) needed it: the Aleste opening jingle plays it on

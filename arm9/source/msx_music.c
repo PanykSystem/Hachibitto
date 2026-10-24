@@ -33,6 +33,7 @@
 #define YM_GAIN_RAMP_STEP 16            // Gain ramp toward full level on key-on.
 #define YM_PERCUSSION_RELEASE_STEP 3500 // PERCUSSION release rate: higher = faster decay for more distinct drum hits.
 
+
 /* FM envelope: 32-bit fixed point, 16 fractional bits.
    0 = full level, YM_ENV_SILENT = silent.  Amplitude = 255 - (env >> 16). */
 #define YM_ENV_SILENT (255u << 16)
@@ -642,9 +643,13 @@ static inline void YM_PrecomputeFMRates(YM *chip, int ch)
        (alias) into rough, gritty noise. Back the depth off by one shift for
        every block above YM_FM_FULL_BLOCK. */
     {
-        u8 extra = (block > YM_FM_FULL_BLOCK) ? (u8)(block - YM_FM_FULL_BLOCK) : 0;
-        p->modShift = YM_MOD_INDEX_SHIFT + extra;
-        p->fbShift = YM_FB_SHIFT + extra;
+        s32 d  = (s32)block - YM_FM_FULL_BLOCK;     // > 0 high notes (less FM), < 0 low notes (more FM)
+        s32 ms = YM_MOD_INDEX_SHIFT + d;
+        s32 fs = YM_FB_SHIFT + d;
+        if (ms < 16) ms = 16;                       // 14 = real chip depth. We use 16 to raise the mod floor to avoid rumbling noise.
+        if (fs < 7)  fs = 7;                        // 7 = real chip feedback
+        p->modShift = (u8)ms;
+        p->fbShift  = (u8)fs;
         
         p->modShift += YM_PresetFMExtra[chip->channels[ch].instrument & 15];
     }
@@ -898,7 +903,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 {
                     bd->osc.phase += bd->osc.phaseIncrement;
 
-                    s32 s = YM_CarrierSineTable[(bd->osc.phase >> YM_SIN_SHIFT) & 0xFF];
+                    s32 s = YM_SinTable[(bd->osc.phase >> YM_SIN_SHIFT) & 0xFF];
 
                     sample +=
                         (s *
@@ -920,7 +925,7 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
                 {
                     tt->osc.phase += tt->osc.phaseIncrement;
 
-                    s32 s = YM_CarrierSineTable[(tt->osc.phase >> YM_SIN_SHIFT) & 0xFF];
+                    s32 s = YM_SinTable[(tt->osc.phase >> YM_SIN_SHIFT) & 0xFF];
 
                     sample +=
                         (s *
