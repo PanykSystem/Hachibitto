@@ -192,6 +192,25 @@ void __attribute__((noinline)) HandleAscii16(u8 media_id, u16 address, u8 value)
     }
 }
 
+// Segment 16 is fixed at 0x4000
+void __attribute__((noinline)) HandleRType(u8 media_id, u16 address, u8 value)
+{
+    u32 block = value & ((value & 0x10) ? 0x17 : 0x1F);
+    u32 msx_offset = block * MyMedia[media_id].blockSize;
+    u32 *src = (u32*)((u8*)ROM_Memory + msx_offset + (media_id ? ((MAX_CART_SIZE_KB/2) * 1024) : 0));
+
+    if ((address & 0xF800) == 0x7000)
+    {
+        MSXCartPtr[media_id][4] = (u8*)src;
+        MSXCartPtr[media_id][5] = (u8*)src+0x2000;
+        if (bCartInPage[2] == (media_id+1))
+        {
+            MemoryMap[4] = MSXCartPtr[media_id][4] - 0x8000;
+            MemoryMap[5] = MSXCartPtr[media_id][5] - 0xA000;
+        }
+    }
+}
+
 #define SRAM_ENABLE_BIT     (MyMedia[media_id].mapperMask+1)      // SRAM Enable is the bit right after the rom selection bits...
 
 void __attribute__((noinline)) HandleAscii8_SRAM2(u8 media_id, u16 address, u8 value)
@@ -1572,6 +1591,7 @@ static MapperWriteHandler const mapperWriteHandlers[END_MAPPERS] __attribute__((
     [ASC8SRAM2]         = HandleAscii8_SRAM2,
     [ASC16SRAM2]        = HandleAscii16_SRAM2,
     [ASC16SRAM8]        = HandleAscii16_SRAM8,
+    [RTYPE]             = HandleRType,
     [GAME_MASTER2]      = HandleGameMaster2,
     [MAJUT]             = HandleMajut,
     [WIZARDRY]          = HandleWizardry,

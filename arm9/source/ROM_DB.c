@@ -45,7 +45,6 @@ typedef struct {
 #define NEO8                0xFF        // 4MB+ carts. Very few games use this currently (more likely coming) but those that do often use other unemulated features (e.g. OPL4 FM).
 #define NEO16               0xFF        // 4MB+ carts. Very few games use this currently (more likely coming) but those that do often use other unemulated features (e.g. OPL4 FM).
 #define YAMANOOTO           0xFF        // Modern flashcart with some specialized features. Might emulate someday.
-#define RType               0xFF        // The oddly banked original but there are versions available in more sensible mapper formats.
 #define ReproCartridgeV1    0xFF        // For Konami Metal Gear series of which there are roughly 1 billion alternate mappers to pick from.
 #define ReproCartridgeV2    0xFF        // For Konami Metal Gear series of which there are roughly 1 billion alternate mappers to pick from.
 #define SuperSwangi         0xFF        // For Super Swangi - Super Altered Beast - there are conversions to more sensible mappers.
@@ -60,9 +59,9 @@ typedef struct {
 #define Halnote             0xFF        // HAL Laboratory productivity software that is coupled with disk. Might add this someday.
 #define AlQuran             0xFF        // Only for Arabic MSX computers
 #define AlQuranDecoded      0xFF        // Only for Arabic MSX computers
-#define MatraInk            0xFF        // Only for Exxon Surfing.
+#define MatraInk            0xFF        // Only for Exxon Surfing
 #define RetroHardMulti31in1 0xFF        // For a couple of 31-in-1 multicarts that have other more sensible mappers available.
-#define System              0xFF        // For various system BIOS files... unsure yet what can be done here.
+#define System              0xFF        // For various system BIOS files... unsure yet what can be done here - need to dig into OpenMSX to see.
 
 const ROM_DB_t ROM_DB[] =
 {
@@ -510,7 +509,7 @@ const ROM_DB_t ROM_DB[] =
   {"0b15b2f61abe5bacb520bde47ba2ed49ee8079f1", PAGE2},
   {"0b2538fa04604b0f55b49207ab41e29413830403", SCC8},
   {"0b3241202f0e2be470e5f2e6139c01983a895bc8", MIRRORED},
-  {"0b379610cb7085005a56b24a0890b79dd5a7e817", RType},
+  {"0b379610cb7085005a56b24a0890b79dd5a7e817", RTYPE},
   {"0b393740f5841871346d3a6dc2f3f36e9cb6ff76", MIRRORED},
   {"0b3a217d3278a43d7460136f955171c762a1f8e5", MIRRORED},
   {"0b3cd906ff0cffd1d3edb6997abcb72bb305fcfa", MIRRORED},
@@ -1073,7 +1072,7 @@ const ROM_DB_t ROM_DB[] =
   {"1aeb22eaf70bb89c08ce00ef52bbc9f254c96e44", MIRRORED},
   {"1aee947b1ad6d478c0def550868a3851c2910809", ASC8},
   {"1aef03f7d0bdaa701517a1ad6a75ab8820674f15", PAGE23},
-  {"1af18369c1237f96b8a54c515f5c204b37f54749", RType},
+  {"1af18369c1237f96b8a54c515f5c204b37f54749", RTYPE},
   {"1af4561a62c2e6258ec63bfe4613ce7616496a7a", GENERIC_16K},
   {"1af617bfd11b10a71936c606174a80019762ea71", Halnote},
   {"1b029b6d60fcabca94aaa403ee120fb02a67ffb9", MIRRORED},
@@ -2133,7 +2132,7 @@ const ROM_DB_t ROM_DB[] =
   {"37ae2be33dbcf87d85a07958ca67635657695298", PAGE23},
   {"37b08a5f01e70cd27ee502850adfe7bbb172b4ab", SCC8},
   {"37baf9aac77436b4939c80d6a575e23a7d5cd76d", MIRRORED},
-  {"37bd4680a36c3a1a078e2bc47b631d858d9296b8", RType},
+  {"37bd4680a36c3a1a078e2bc47b631d858d9296b8", RTYPE},
   {"37c0f801ff82979fc34fca6f1c39a0af2b9a6d65", MIRRORED},
   {"37c85041128ee21300327726b7300a20ef6b84dd", MIRRORED},
   {"37d3202239bca95da7585ea36bb2307b702aeb79", MIRRORED},
@@ -3635,7 +3634,7 @@ const ROM_DB_t ROM_DB[] =
   {"5ef2da1e60295156b55c3daa0bfa61f8cab00a3a", PAGE23},
   {"5ef7d03b138a2023f6def241b671c666f97ed83b", KON8},
   {"5ef92707dcb9d3ce4c7571f6cbe23b7f61c24c2d", SCC8},
-  {"5efae0c1493eae286ad306071e20eb8a4e4869f4", RType},
+  {"5efae0c1493eae286ad306071e20eb8a4e4869f4", RTYPE},
   {"5efcaabd03b6f2ca2835f8d8e6f9d25857c39307", PAGE23},
   {"5efd53fb520a86713dc3a4d28e2732e59e93a30d", PAGE23},
   {"5f0862d80ebda382532c1e95d0bdddf38e4a70d4", ASC16},
@@ -4559,7 +4558,7 @@ const ROM_DB_t ROM_DB[] =
   {"77b886b3ed4048a099099d6b9b0d4cca3a05dce1", MIRRORED},
   {"77c46391de8073f6af9754f2b4eba150f258b182", PAGE23},
   {"77cacb5e9a6cef48a36e8acabc938d5f1f1beadc", KON8},
-  {"77caeccd08eb558b727350fdd278ab0d7315e968", RType},
+  {"77caeccd08eb558b727350fdd278ab0d7315e968", RTYPE},
   {"77cd01e29071dece70d18cf9e7e2d2ce455d001f", PAGE23},
   {"77d36802c4c7134f2a910d5c138c124a707b88cd", MIRRORED},
   {"77d6e2aa6c08efca4eaefa744451352a49fa4539", MIRRORED},
@@ -5664,7 +5663,7 @@ const ROM_DB_t ROM_DB[] =
   {"96c4438cc4bcce904d08e7d5fe42b52dd0bc9f19", ASC8},
   {"96c6b6f160e99e101266e6540be4b616a355192a", SCC8},
   {"96c6fd49694e08beaf43c2fac7876c56491f9876", MIRRORED},
-  {"96c84bfc2756313a6a2e1d09319f4aa85e815127", RType},
+  {"96c84bfc2756313a6a2e1d09319f4aa85e815127", RTYPE},
   {"96cda974f4dfbd5f3e94808184f071fbc8925099", MIRRORED},
   {"96d83945d041f6f795a3107904a9986de86df8a6", PAGE23},
   {"96da54fd442f03b22dd75d0cffebd1a131173032", KON8},
@@ -5847,7 +5846,7 @@ const ROM_DB_t ROM_DB[] =
   {"9b5f1555d62eceabb9387fb82fa72d5efc4e7477", MIRRORED},
   {"9b6adc252b1208d9cb8f13b6d21fadf3513ee526", MIRRORED},
   {"9b6af42dc9201ae3125cf07661b52b954c1455ca", ASC16},
-  {"9b6cb224f2a7a4af69221f1280d3344a5c88450e", RType},
+  {"9b6cb224f2a7a4af69221f1280d3344a5c88450e", RTYPE},
   {"9b737429141719b31035ef986e0932225d0b18e7", RetroHardMulti31in1},
   {"9b7531830e112d0b13d6a49588ba1f1b528baed4", ASC16},
   {"9b76352d2ef21ff3193416ac87fdc9555e378c0f", ASC16},
@@ -5890,7 +5889,7 @@ const ROM_DB_t ROM_DB[] =
   {"9c74c597eac815b0bb16f58b584b916cd736964c", PAGE23},
   {"9c843ab4b75a610834ba58cecbd7d6940f97e03d", KON8},
   {"9c86e844a10d701fc43cc9ab2ee352b8c0a87fd0", MIRRORED},
-  {"9c886fff02779267041efe45dadefc5fd7f4b9a2", RType},
+  {"9c886fff02779267041efe45dadefc5fd7f4b9a2", RTYPE},
   {"9c89215dd36eded769691708eb8c82dec1ce5109", ASC16},
   {"9c9b2f028d0306cfafd478351ab14e93cfd5e882", ASC8},
   {"9c9da64f7b0ad20b0d699bbb254ae20666867176", MIRRORED},

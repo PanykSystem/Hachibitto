@@ -172,7 +172,7 @@ extern u8 zanac_glitch_patch;
 #define RESERVED_1      21
 #define RESERVED_2      22
 #define RESERVED_3      23
-#define RESERVED_4      24
+#define RTYPE           24  // Not one of the general mappers a user can pick
 #define GAME_MASTER2    25  // Not one of the general mappers a user can pick
 #define MAJUT           26  // Not one of the general mappers a user can pick
 #define NAMCO           27  // Not one of the general mappers a user can pick

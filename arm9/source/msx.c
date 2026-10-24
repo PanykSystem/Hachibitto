@@ -1171,13 +1171,13 @@ void msxWipeRAM(void)
 }
 
 // -------------------------------------------------------------------
-// Return 1 if the MyMedia[MEDIA_CART1].mapperType indicates we are a 16K banking cart...
+// Return 1 if the MyMedia[media_id].mapperType indicates we are a 16K banking cart...
 // Otherwise the system will assume a standard 8K mapper.
 // -------------------------------------------------------------------
-u8 Is16kBanking(void)
+u8 Is16kBanking(u8 media_id)
 {
-    if (MyMedia[MEDIA_CART1].mapperType == ASC16 || MyMedia[MEDIA_CART1].mapperType == ASC16SRAM2 || MyMedia[MEDIA_CART1].mapperType == ASC16SRAM8 || MyMedia[MEDIA_CART1].mapperType == XBLAM ||
-        MyMedia[MEDIA_CART1].mapperType == SUPERLR || MyMedia[MEDIA_CART1].mapperType == XEVIOUS || MyMedia[MEDIA_CART1].mapperType == GENERIC_16K)
+    if (MyMedia[media_id].mapperType == ASC16 || MyMedia[media_id].mapperType == ASC16SRAM2 || MyMedia[media_id].mapperType == ASC16SRAM8 || MyMedia[media_id].mapperType == XBLAM ||
+        MyMedia[media_id].mapperType == SUPERLR || MyMedia[media_id].mapperType == XEVIOUS || MyMedia[media_id].mapperType == GENERIC_16K || MyMedia[media_id].mapperType == RTYPE)
         return 1;
     else
         return 0;
@@ -1483,6 +1483,17 @@ void MSX_CartSetup(u8 media_id)
             MSXCartPtr[media_id][6] = (u8*)Unmapped_Memory;          // Segment Unmapped
             MSXCartPtr[media_id][7] = (u8*)Unmapped_Memory;          // Segment Unmapped
         }
+        else if (MyMedia[media_id].mapperType == RTYPE)
+        {
+            MSXCartPtr[media_id][0] = (u8*)Unmapped_Memory;          // Segment Unmapped
+            MSXCartPtr[media_id][1] = (u8*)Unmapped_Memory;          // Segment Unmapped
+            MSXCartPtr[media_id][2] = (u8*)CART_Memory+(240*1024)+0x0000; // Segment 0xF fixed
+            MSXCartPtr[media_id][3] = (u8*)CART_Memory+(240*1024)+0x2000; // Segment 0xF fixed
+            MSXCartPtr[media_id][4] = (u8*)CART_Memory+0x0000;       // Segment 0 default
+            MSXCartPtr[media_id][5] = (u8*)CART_Memory+0x2000;       // Segment 0 default
+            MSXCartPtr[media_id][6] = (u8*)Unmapped_Memory;          // Segment Unmapped
+            MSXCartPtr[media_id][7] = (u8*)Unmapped_Memory;          // Segment Unmapped
+        }
         else if (MyMedia[media_id].mapperType == XEVIOUS)
         {
             MSXCartPtr[media_id][0] = (u8*)Unmapped_Memory;          // Segment Unmapped
@@ -1610,28 +1621,28 @@ void MSX_CartSetup(u8 media_id)
         // ---------------------------------------------------------------------
         if (MyMedia[media_id].filesize <= (128 * 1024))
         {
-            if (Is16kBanking())
+            if (Is16kBanking(media_id))
                 MyMedia[media_id].mapperMask = (MyMedia[media_id].filesize <= (64 * 1024)) ? 0x03:0x07;
             else
                 MyMedia[media_id].mapperMask = (MyMedia[media_id].filesize <= (64 * 1024)) ? 0x07:0x0F;
         }
         else if (MyMedia[media_id].filesize <= (512 * 1024))
         {
-            if (Is16kBanking())
+            if (Is16kBanking(media_id))
                 MyMedia[media_id].mapperMask = (MyMedia[media_id].filesize <= (256 * 1024)) ? 0x0F:0x1F;
             else
                 MyMedia[media_id].mapperMask = (MyMedia[media_id].filesize <= (256 * 1024)) ? 0x1F:0x3F;
         }
         else if (MyMedia[media_id].filesize <= (1024 * 1024))
         {
-            if (Is16kBanking())
+            if (Is16kBanking(media_id))
                 MyMedia[media_id].mapperMask = 0x3F;
             else
                 MyMedia[media_id].mapperMask = 0x7F;
         }
         else if (MyMedia[media_id].filesize <= (2048 * 1024))
         {
-            if (Is16kBanking())
+            if (Is16kBanking(media_id))
                 MyMedia[media_id].mapperMask = 0x7F;
             else
                 MyMedia[media_id].mapperMask = 0xFF;
@@ -1649,7 +1660,7 @@ void MSX_CartSetup(u8 media_id)
     // --------------------------------------------------------------------------
     // Some mappers have 8K blocks, some have 16K blocks... sort that out here.
     // --------------------------------------------------------------------------
-    MyMedia[media_id].blockSize = (Is16kBanking() ? 0x4000:0x2000);
+    MyMedia[media_id].blockSize = (Is16kBanking(media_id) ? 0x4000:0x2000);
 }
 
 

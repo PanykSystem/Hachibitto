@@ -9,13 +9,12 @@
 // The Hachibitto emulator is offered as-is, without any warranty.
 // =====================================================================================
 
-
 #ifndef CRC32_H
 #define CRC32_H
 #include <nds.h>
 
 extern u32 getCRC32(u8 *buf, u32 size);
-extern u32 crc32(unsigned int crc, const unsigned char *buf, unsigned int len);
+extern u32 crcBasedOnFilename(const char *filename);
+extern u8 isDisk(const char *filename);
 
 #endif
-

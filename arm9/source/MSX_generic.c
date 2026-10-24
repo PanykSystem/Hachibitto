@@ -1985,6 +1985,15 @@ u32 ReadFileCarefully(char *filename, u8 *buf, u32 buf_size, u32 buf_offset, u32
 
         // TODO add a trap for infinite loop - exit with error.
     } while (crc1 != crc2); // If the file couldn't be read, file_size will be 0 and the CRCs will both be 0xFFFFFFFF
+    
+    // -----------------------------------------------------------------------
+    // If we are a .DSK file, we need to use the filename itself as the CRC32
+    // or else disks that get re-written will end up with a different CRC32.
+    // -----------------------------------------------------------------------
+    if (isDisk(filename))
+    {
+        crc1 = crcBasedOnFilename(filename);
+    }
 
     if (crc)
     {
