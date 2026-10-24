@@ -1330,7 +1330,7 @@ void SetDefaultGameConfig(void)
     myConfig.dpad = DPAD_NORMAL;                // Normal DPAD use - mapped to joystick
     myConfig.yOffset = 0;                       // Default is no Y offset
     myConfig.expansion = EXP_NONE;              // Default is no expansion (normal PSG sound, no special mapper cards in slot 2)
-    myConfig.cpuBoost = 0;                      // Run CPU at true speed (1=boost 10%)
+    myConfig.cpuBoost = 0;                      // Run CPU at true speed (1 = boost 25%, 2 = boost 50%)
     myConfig.splitRefresh = 2;                  // 0=Strict, 1=Refresh a line, 2= Refresh two lines
     myConfig.scaleScreen = 0;                   // 0=No Screen Scale. 1=Vertical Compression (yuck!)
     myConfig.maskBorders = 0;                   // No border masking by default

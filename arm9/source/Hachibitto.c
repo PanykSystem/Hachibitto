@@ -1972,7 +1972,7 @@ void HachibittoRunEmu(void)
             // ----------------------------------------------------------------------
             // If we are in Screen 7 'Zoom' mode, the L/R keys take on new meaning...
             // ----------------------------------------------------------------------
-            if ((zoom_screen == 2) && (nds_key & (KEY_L | KEY_R)))
+            if ((zoom_screen == 2) && (nds_key & (KEY_L | KEY_R)) && ((nds_key & KEY_Y) == 0))
             {
                 if (nds_key & KEY_R)
                 {
@@ -1995,12 +1995,7 @@ void HachibittoRunEmu(void)
             {
                 // Screen swap top/bottom
                 lcdSwap();
-                WAITVBL;
-                WAITVBL;
-                WAITVBL;
-                WAITVBL;
-                WAITVBL;
-                WAITVBL;
+                WAITVBL; WAITVBL; WAITVBL; WAITVBL; WAITVBL; WAITVBL;
             }
             else if ((nds_key & KEY_L) && (nds_key & KEY_R) && (nds_key & KEY_Y))
             {
@@ -2009,12 +2004,7 @@ void HachibittoRunEmu(void)
                 DSPrint(20, 1, 2, "YZ[");
                 screenshot();
                 debug_save();
-                WAITVBL;
-                WAITVBL;
-                WAITVBL;
-                WAITVBL;
-                WAITVBL;
-                WAITVBL;
+                WAITVBL; WAITVBL; WAITVBL; WAITVBL; WAITVBL; WAITVBL;
                 DSPrint(20, 0, 6, "   ");
                 DSPrint(20, 1, 6, "   ");
             }
