@@ -86,6 +86,8 @@ u8 io_show_status = 0;     // Used to indicate a disk activity icons
 u8 sram_show_status = 0;   // Used to show SRAM icon for SRAM-based carts
 u8 flash_show_status = 0;  // Used to show Flash (lightning bolt) icon for Flash-based carts
 u8 zanac_glitch_patch = 0; // Only when Zanac EX is loaded to fix corrupt return to menu
+u8 bMainMenuActive = 0;    // Set to 1 when main menu is active
+
 Media_t MyMedia[3];        // Covering CART1, CART2 and DISK
 
 // --------------------------------------------------------------------------
@@ -2647,35 +2649,38 @@ ITCM_CODE void irqVBlank(void)
     // Manage time and true vSync on display output to reduce tearing...
     vusCptVBL++;
     dsVSyncCount++;
-
-    // ---------------------------------------------------------------------
-    // Are we in 192 scanline mode? If so, we don't need ANY screen panning.
-    // ---------------------------------------------------------------------
-    if (!(VDP[9] & 0x80) && !myConfig.overscan) // High bit set if we are in 212 mode (we ignore this if overscan enabled)
+    
+    if (!bMainMenuActive) // If main menu active, don't shift anything...
     {
-        cyBG = 0;   // No shift
-        shifty = 0; // No shift
-    }
-    else
-    {
-        cyBG = ((s16)myConfig.yOffset + temp_offset) << 8;
-
-        // --------------------------------------------------------------------
-        // Compress screen (yuck!). We do a little bit of DS magic here to
-        // shift one of the two DS video pointers so that we end up with a
-        // tiny bit of vertical blurring that helps games that have static
-        // screens so that some lines repeat a pixel rather than just losing
-        // it completely. This produces squatter/fatter text but generally
-        // looks better than a line of missing pixels. It's not perfect.
-        // --------------------------------------------------------------------
-        if (myConfig.scaleScreen)
+        // ---------------------------------------------------------------------
+        // Are we in 192 scanline mode? If so, we don't need ANY screen panning.
+        // ---------------------------------------------------------------------
+        if (!(VDP[9] & 0x80) && !myConfig.overscan) // High bit set if we are in 212 mode (we ignore this if overscan enabled)
         {
-            ydyBG = (((myConfig.overscan ? 224 : 212) / 192) << 8) | ((myConfig.overscan ? 224 : 212) % 192);
-            if (myConfig.yOffset + temp_offset == 0)
+            cyBG = 0;   // No shift
+            shifty = 0; // No shift
+        }
+        else
+        {
+            cyBG = ((s16)myConfig.yOffset + temp_offset) << 8;
+
+            // --------------------------------------------------------------------
+            // Compress screen (yuck!). We do a little bit of DS magic here to
+            // shift one of the two DS video pointers so that we end up with a
+            // tiny bit of vertical blurring that helps games that have static
+            // screens so that some lines repeat a pixel rather than just losing
+            // it completely. This produces squatter/fatter text but generally
+            // looks better than a line of missing pixels. It's not perfect.
+            // --------------------------------------------------------------------
+            if (myConfig.scaleScreen)
             {
-                cyBG = (1 << 8);
+                ydyBG = (((myConfig.overscan ? 224 : 212) / 192) << 8) | ((myConfig.overscan ? 224 : 212) % 192);
+                if (myConfig.yOffset + temp_offset == 0)
+                {
+                    cyBG = (1 << 8);
+                }
+                shifty = 20;
             }
-            shifty = 20;
         }
     }
 

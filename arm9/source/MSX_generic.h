@@ -253,10 +253,11 @@ extern u32 frame_number;
 extern u8 CurrentEpochSaved;
 extern u8 msx_irq_pending;
 extern u8 palette_latch;
-extern uint8_t OccBuf[320];
+extern u8 OccBuf[320];
 extern u16 beeperFreq;
 extern u8 zoom_screen;
 extern u8 keyMapType;
+extern u8 bMainMenuActive;
 
 // --------------------------------------------------
 // Some CPU and VDP and SGM stuff that we need

@@ -578,7 +578,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
     s16 dwell = 60;
     u8 bShowPreviewSnaps = 1;
     u8 dampen_boxart = 15;
-
+    
     // Show the menu...
     while ((keysCurrent() & (KEY_TOUCH | KEY_START | KEY_SELECT | KEY_A | KEY_B)) != 0)
         ;
@@ -613,7 +613,7 @@ u8 HachibittoChooseFile(u8 media_id, u8 allow_dir_change)
         romSelected = 0;
     }
     dsDisplayFiles(firstRomDisplay, romSelected);
-
+    
     // -----------------------------------------------------
     // Until the user selects a file or exits the menu...
     // -----------------------------------------------------
@@ -2073,9 +2073,11 @@ void HachibittoMainMenu(void)
     u8 bPlayGame = 0;
     u8 screenTouched = 1;
 
+    bMainMenuActive = 1;
+
     // Upper Screen Background
     UpperScreenMainMenu();
-
+    
     // Lower Screen Background
     BottomScreenMainMenu();
 
@@ -2252,6 +2254,8 @@ void HachibittoMainMenu(void)
         ShowRandomPreviewSnaps();
         swiWaitForVBlank();
     }
+    
+    bMainMenuActive = 0;
 }
 
 //*****************************************************************************
