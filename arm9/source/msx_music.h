@@ -17,25 +17,28 @@
 //  modulator and carrier envelope states.
 //
 //  Current melodic synthesis:
-//    - Two operators are synthesized per channel: a sine modulator changes the
-//      carrier's phase. Modulation depth is computed at full precision from
-//      the modulator envelope and TL (0.75 dB per step, YM_TLAtten) and scaled
-//      by YM_MOD_INDEX_SHIFT. The real chip swings the carrier by about
-//      +/-4pi (shift 14); the value in use is deliberately much lower and was
-//      chosen by ear (see the aliasing note below).
+//    - Two operators are synthesized per channel: the modulator (a sine, or a
+//      half-sine for custom patches with DM set) changes the carrier's phase.
+//      Modulation depth is computed at full precision from the modulator
+//      envelope and TL (0.75 dB per step, YM_TLAtten) and scaled by
+//      YM_MOD_INDEX_SHIFT. The real chip swings the carrier by about +/-4pi
+//      (shift 14); the value in use is deliberately much lower and was chosen
+//      by ear (see the aliasing note below).
 //    - Feedback (FB) modulates the modulator's own PHASE, using a smoothed
 //      copy of its output as a stand-in for the chip's two-sample average
 //      (YM_FM_FBDepth, scaled by YM_FB_SHIFT).
 //    - MUL, TL, FB and AR/DR/SL/RR contribute to the model; block/KSR affect
-//      the approximate envelope-rate calculation. The VIB bits drive a gentle
-//      vibrato LFO (below). KSL, AM and EG-TYP are decoded but not modeled
-//      (every note holds at its sustain level while the key is down). Custom
-//      patches honor DC/DM waveform selection using full- or half-sine
-//      operator waveforms; preset waveform behavior is unchanged.
+//      the approximate envelope-rate calculation. KSL and EG-TYP are decoded
+//      but not modeled (every note holds at its sustain level while the key
+//      is down). Custom patches honor DC/DM waveform selection using full- or
+//      half-sine operator waveforms; preset waveform behavior is unchanged.
 //    - Vibrato: operators whose VIB bit is set get a ~6.4 Hz, 8-step LFO
 //      applied to their phase increment (YM_VIB_SHIFT; about +/-7 cents).
-//      AM (tremolo) is NOT modeled: an earlier all-instrument LFO attempt
-//      gave far too much shimmer and made other sounds less authentic.
+//    - Tremolo (AM): operators whose AM bit is set (the Vibraphone preset and
+//      some custom patches) get a ~3.8 Hz triangle LFO that scales their level
+//      by up to YM_AM_DEPTH/256. The default is about 2.5 dB, half the real
+//      chip's ~4.8 dB (108), because an earlier all-instrument LFO attempt
+//      gave far too much shimmer.
 //    - Envelopes are 32-bit fixed point (16.16) and advance once every
 //      (1 << YM_ENV_DIV_SHIFT) output samples to save CPU. Decay and release
 //      speeds follow the hardware's exponential rate scaling (speed doubles
@@ -43,14 +46,18 @@
 //      The ramp is LINEAR in amplitude rather than the OPLL's logarithmic (dB)
 //      curve, so YM_RATE_BASE is tuned by ear to compensate. Attack is a
 //      simpler approximation and is not hardware-accurate.
+//    - Carrier envelope and channel volume are applied in a single multiply
+//      and one shift, with the YM output level (ymScale) folded into that
+//      shift. This avoids intermediate truncation, which turned fading notes
+//      into coarse, grating stair-steps.
 //    - Melodic FM is rendered at half the output sample rate, with oscillator
 //      phases advancing by two sample steps. A simple linear midpoint between
 //      adjacent rendered samples softens the skipped sample. This intentionally
 //      trades some temporal detail and sound quality for lower mixer CPU use.
 //      Rhythm and output filtering continue at the full output rate.
 //    - ALIASING: because of the half-rate render (Nyquist ~7.7 kHz), strong FM
-//      sidebands fold back as rough, gritty noise, worst on high notes. Three
-//      mitigations are in place, all precomputed when a channel changes:
+//      sidebands fold back as rough, gritty noise, worst on high notes. Four
+//      controls are in place, all precomputed when a channel changes:
 //        1. Global modulator and feedback depth are kept well below the real
 //           chip (YM_MOD_INDEX_SHIFT, YM_FB_SHIFT).
 //        2. Both shift by one per block around YM_FM_FULL_BLOCK: high notes get
@@ -60,36 +67,37 @@
 //           rumbly) and feedback at 7 (real chip).
 //        3. YM_PresetFMExtra trims modulator depth per ROM preset. Harpsichord
 //           (preset 11, TL=7, the strongest modulator and one that never
-//           decays) needed it: the Aleste opening jingle plays it on
-//           channels 4 and 5 and sounded gritty without the trim.
+//           decays) needed it: an opening jingle plays it on channels 4 and 5
+//           and sounded gritty without the trim.
+//        4. Entry 0 of the same table trims custom patches (set to 3; each step
+//           halves the depth, 8 turns custom FM off). A game's ending jingle
+//           stacks one custom patch (FB 7, half-wave modulator) as a tight
+//           three-note cluster on channels 0-2, and full FM made it harsh.
+//           3 and 4 sounded clean; 2 showed a hint of harshness.
 //    - Sustain levels (SL) come from YM_FM_SustainAtten; channel volume uses
 //      YM_SustainGain (3 dB per step). Preset carriers use a soft-square
 //      lookup; custom carriers use the selected sine waveform.
 //
 //  Current rhythm synthesis (shared in concept, with separate mixer code):
-//    - Bass Drum and Tom-Tom use tonal oscillators.
+//    - Bass Drum and Tom-Tom use tonal oscillators with the same soft-square
+//      lookup as preset carriers. A plain sine at drum frequencies is nearly
+//      inaudible on the DS speaker; the extra harmonics give the kick punch.
 //    - Hi-Hat, Snare Drum and Top Cymbal use inexpensive phase/noise-based
 //      approximations and simplified gain/release behavior.
 //
 //  Implementation notes (CPU and memory):
 //    - YMMixer and YM_RenderChannel2FM live in ITCM. YM_EnvStep is one shared
-//      noinline ITCM function (inlining it twice overflowed ITCM), and it is
-//      skipped for operators that are simply holding at their sustain level.
-//    - The YM output-level shift (myConfig.ymScale) is applied once to the
-//      summed melodic sample, not per channel.
-//    - Phase increments use a precomputed reciprocal (YM_PHASE_K, one UMULL)
-//      instead of a 64-bit divide, since games rewrite frequency and
-//      instrument registers every frame. Redundant $30-$38 writes that don't
-//      change the instrument only refresh the volume.
-//    - DTCM holds only per-sample data: the two sine tables, YM_FM[] (packed
-//      to 32 bytes per channel) and a few state bytes. Register-write-time
-//      tables (TL, MUL, SL, FB depth, volume, vibrato, preset trim) are const
-//      in normal memory.
+//      noinline ITCM function (inlining it twice overflowed ITCM).
+//    - Redundant $30-$38 writes that don't change the instrument only refresh
+//      the channel volume instead of recomputing frequency (games rewrite
+//      these registers every frame).
+//    - Per-sample data (the two sine tables, YM_FM[] and a few state bytes)
+//      lives in DTCM, which is nearly full. Anything only read on a register
+//      write should stay out of it.
 //
 //  The implementation omits cycle-accurate timing and several parts of the
 //  YM2413 model. Comments describe the current approximation, not a claim of
 //  equivalence with a hardware OPLL. Performance measurements belong in notes.
-//
 //
 //  Register map (verified against the Yamaha OPLL Application Manual):
 //  (unchanged from here on)
@@ -142,7 +150,7 @@ typedef struct
     /* Melodic two-operator FM runtime state. */
     u32 modEnv, carEnv;     // 0 = full level, YM_ENV_SILENT = silent (was u8)
     u8  modState, carState;
-    s16 feedback;    
+    s16 feedback;
 } YM_Oscillator;
 
 //@----------------------------------------------------------------------------

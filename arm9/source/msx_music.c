@@ -60,9 +60,9 @@ static u8 YM_SustainGain[16] __attribute__((section(".dtcm"))) =
 
 #define YM_OUT_SHIFT 8 // Output scaling for the mixer and rhythm paths.
                        // The FM path scales its output separately.
-                       
+
 /* Extra modulator-depth shift per ROM preset (0 = global depth). Index 0 = custom patch. */
-static u8 YM_PresetFMExtra[16] __attribute__((section(".dtcm"))) = { 0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0 };   // 11 = Harpsichord (dampen for Aleste)
+static u8 YM_PresetFMExtra[16] __attribute__((section(".dtcm"))) = { 3,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0 };   // 11 = Harpsichord (dampen for Aleste)
 
 //@----------------------------------------------------------------------------
 //@ 256-entry soft-square-like carrier waveform table, amplitude -127..127.
@@ -507,7 +507,7 @@ void YMWrite(u8 value, u8 address, YM *chip)
     {
         int ch = address - 0x30;
         u8 oldInst = chip->channels[ch].instrument;
-                
+
         chip->channels[ch].instrument = value >> YM_REG_INST_SHIFT;
         chip->channels[ch].volume = value & YM_REG_VOL_MASK;
         chip->channels[ch].instPtr = YM_GetInstrument(chip, chip->channels[ch].instrument);
@@ -529,11 +529,11 @@ void YMWrite(u8 value, u8 address, YM *chip)
             chip->rhythmVolTOM = value >> YM_REG_INST_SHIFT;
             chip->rhythmVolTCY = value & YM_REG_VOL_MASK;
         }
-        
+
         if (chip->channels[ch].instrument != oldInst)
             YM_UpdateChannelFreq(chip, ch);   // new MUL values -> new phase increments
         else
-            YM_PrecomputeFMRates(chip, ch);   // volume-only change        
+            YM_PrecomputeFMRates(chip, ch);   // volume-only change
     }
 }
 
@@ -554,16 +554,15 @@ enum
     YM_FM_ENV_RELEASE
 };
 
-static u8 YM_FM_SustainAtten[16] __attribute__((section(".dtcm"))) =
-    {
-        0, 8, 16, 24, 32, 40, 48, 56,
-        64, 72, 80, 88, 96, 104, 112, 127};
+static u8 YM_FM_SustainAtten[16] __attribute__((section(".dtcm"))) = {
+    0, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 127
+};
 
 /* Feedback in phase units (256 per cycle) at full-scale modulator output.
    Real chip: 0, pi/16, pi/8, pi/4, pi/2, pi, 2pi, 4pi. */
-static u16 YM_FM_FBDepth[8] __attribute__((section(".dtcm"))) =
-    {
-        0, 8, 16, 32, 64, 128, 256, 512};
+static u16 YM_FM_FBDepth[8] __attribute__((section(".dtcm"))) = {
+    0, 8, 16, 32, 64, 128, 256, 512
+};
 
 /* Attack still uses the old small per-sample step (applied << 16). */
 static inline u8 YM_FMRateStepPrecompute(u8 rate, u8 block, u8 ksr)
@@ -649,7 +648,7 @@ static inline void YM_PrecomputeFMRates(YM *chip, int ch)
         if (fs < 7)  fs = 7;                        // 7 = real chip feedback
         p->modShift = (u8)ms;
         p->fbShift  = (u8)fs;
-        
+
         p->modShift += YM_PresetFMExtra[chip->channels[ch].instrument & 15];
     }
     p->vibMod = inst->vibMod;
@@ -744,10 +743,19 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
        the next envelope tick. Both operators restart together. */
     if (doEnv | keyEdge)
     {
-        YM_EnvStep(&osc->modEnv, &osc->modState, keyOn, keyEdge,
-                   p->arMod, p->drMod, p->slMod, p->susMod, p->rrMod);
-        YM_EnvStep(&osc->carEnv, &osc->carState, keyOn, keyEdge,
-                   p->arCar, p->drCar, p->slCar, p->susCar, p->rrCar);
+        if (keyEdge || !keyOn ||
+            osc->modState != YM_FM_ENV_SUSTAIN || p->susMod)
+        {
+            YM_EnvStep(&osc->modEnv, &osc->modState, keyOn, keyEdge,
+                       p->arMod, p->drMod, p->slMod, p->susMod, p->rrMod);
+        }
+
+        if (keyEdge || !keyOn ||
+            osc->carState != YM_FM_ENV_SUSTAIN || p->susCar)
+        {
+            YM_EnvStep(&osc->carEnv, &osc->carState, keyOn, keyEdge,
+                       p->arCar, p->drCar, p->slCar, p->susCar, p->rrCar);
+        }
     }
 
     osc->previousKeyOn = keyOn;
@@ -817,23 +825,21 @@ ITCM_CODE static inline s32 YM_RenderChannel2FM(YM_Oscillator *osc, u8 keyOn, in
         }
     }
 
-    // Carrier envelope followed by channel volume attenuation.
-    carrier = (carrier * (255 - (s32)(osc->carEnv >> 16))) >> 7;
-    carrier = (carrier * p->volume) >> 7;
+    // Carrier envelope and channel volume in one step: +/-8.2M, no early truncation.
+    carrier = carrier * (255 - (s32)(osc->carEnv >> 16)) * (s32)p->volume;
 
     osc->modPhase += mi;
     osc->phase += pi;
 
     // Apply the configured YM output level after channel-volume attenuation.
-    return carrier << (myConfig.ymScale + 1);
+    return carrier >> (13 - myConfig.ymScale);   // same level as (>>14) then << (ymScale+1)
 }
 
 // -------------------------------------------------------------------------
 // And finally the mixer - this is a real hot-spot of emulation given the
 // number of music channels that need to be handled. In ITCM to help speed.
-// -------------------------------------------------------------------------
-// -------------------------------------------------------------------------
-// Mixer: melodic FM is rendered at half the output rate; rhythm and filtering
+//
+// Melodic FM is rendered at half the output rate; rhythm and filtering
 // remain at the full output rate.
 // -------------------------------------------------------------------------
 ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
@@ -1061,17 +1067,11 @@ ITCM_CODE void YMMixer(int len, s16 *dest, YM *chip)
         chip->outputFilterState = sample;
 
         /* Mix one synthesized sample into the existing output buffer. */
-        s32 mixed = ((s32)dest[i] + 32767) + sample;
+        s32 mixed = ((s32)dest[i] + 32768) + sample;
 
         // Clamp final mixed result...
-        if (mixed > 32767)
-        {
-            mixed = 32767;
-        }
-        else if (mixed < -32768)
-        {
-            mixed = -32768;
-        }
+        if (mixed > 32767) mixed = 32767;
+        else if (mixed < -32768) mixed = -32768;
 
         dest[i] = (s16)mixed;
     }
